@@ -12,3 +12,10 @@ def quatderiv(quat, omega):
 
 def vector_in_frame(F, inlist):
     return F.x*inlist[0]+F.y*inlist[1]+F.z*inlist[2]
+
+def quickinv_sym(M):
+    assert isinstance(M,MatrixBase) and M.rows == M.cols
+    n = M.rows
+    A = Matrix(n,n,symbols('_X[0:%u][0:%u]' % (n,n)))
+    B = Matrix(simplify(A.inv()))
+    return B.xreplace(dict(zip(A,M)))
