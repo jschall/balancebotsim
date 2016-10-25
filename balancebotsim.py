@@ -23,24 +23,28 @@ cart_quat_dot = Matrix(dynamicsymbols('cart_quat[0:4]', 1))
 cart_ang_vel = Matrix(dynamicsymbols('cart_omega[0:3]'))
 
 # Define pole symbols
+pole_length = Symbol('pole_length')
 pole_mass = Symbol('pole_mass')
 pole_theta = dynamicsymbols('pole_theta', 0)
 pole_theta_dot = dynamicsymbols('pole_theta', 1)
 pole_omega = dynamicsymbols('pole_omega')
 
+# Define wheel symbols
+wheel_mass = Symbol('wheel_mass')
+wheel_radius = Symbol('wheel_radius')
+wheel_base = Symbol('wheel_base')
+
 # Define lwheel symbols
-lwheel_mass = Symbol('lwheel_mass')
 lwheel_theta = dynamicsymbols('lwheel_theta', 0)
 lwheel_theta_dot = dynamicsymbols('lwheel_theta', 1)
 lwheel_omega = dynamicsymbols('lwheel_omega')
-lwheel_contact_p = Matrix(symbols('lwheel_contact_p[0:3]'))
-lwheel_contact_f = Matrix(symbols('lwheel_contact_f[0:3]'))
+lwheel_contact_force = Matrix(dynamicsymbols('lwheel_contact_force[0:3]'))
 
 # Define rwheel symbols
-rwheel_mass = Symbol('rwheel_mass')
 rwheel_theta = dynamicsymbols('rwheel_theta', 0)
 rwheel_theta_dot = dynamicsymbols('rwheel_theta', 1)
 rwheel_omega = dynamicsymbols('rwheel_omega')
+rwheel_contact_force = Matrix(dynamicsymbols('rwheel_contact_force[0:3]'))
 
 # Define cart
 cart_frame = ReferenceFrame('cart_frame')
@@ -64,7 +68,7 @@ body_list.append(cart_body)
 pole_frame = ReferenceFrame('pole_frame')
 pole_frame.orient(cart_frame, 'Axis', [pole_theta, cart_frame.x])
 pole_inertia = inertia(pole_frame, 1., 1., 1.)
-pole_masscenter = cart_masscenter.locatenew('pole_masscenter', -1.*pole_frame.z)
+pole_masscenter = cart_masscenter.locatenew('pole_masscenter', -0.5*pole_length*pole_frame.z)
 pole_masscenter.v2pt_theory(cart_masscenter, N, pole_frame)
 pole_body = RigidBody('pole_body', pole_masscenter, pole_frame, pole_mass, (pole_inertia, pole_masscenter))
 
@@ -75,25 +79,45 @@ force_list.append((pole_masscenter, pole_mass*gravity*N.z))
 kde_list.append(pole_theta_dot-pole_omega)
 body_list.append(pole_body)
 
+# Define the ground direction vector
+# This is done by subtracting the component of the N.z vector along cart_frame.y from N.z, resulting in only the component in the cart_frame x-z plane, and normalizing
+ground_direction_vector = (N.z - N.z.dot(cart_frame.y)*cart_frame.y) / N.z.dot(cart_frame.y)
+
 # Define lwheel
 lwheel_frame = ReferenceFrame('lwheel_frame')
 lwheel_frame.orient(cart_frame, 'Axis', [lwheel_theta, cart_frame.y])
 lwheel_inertia = inertia(lwheel_frame, 1., 1., 1.)
-lwheel_masscenter = cart_masscenter.locatenew('lwheel_masscenter', -0.12*cart_frame.y)
+lwheel_masscenter = cart_masscenter.locatenew('lwheel_masscenter', -0.5*wheel_base*cart_frame.y)
 lwheel_masscenter.v2pt_theory(cart_masscenter, N, lwheel_frame)
-lwheel_body = RigidBody('lwheel_body', lwheel_masscenter, lwheel_frame, lwheel_mass, (lwheel_inertia, lwheel_masscenter))
-lwheel_contact_point = lwheel_masscenter.locatenew('lwheel_contact_point', vector_in_frame(lwheel_frame, lwheel_contact_p))
-lwheel_contact_point.v2pt_theory(lwheel_masscenter, N, lwheel_frame)
-lwheel_contact_force = vector_in_frame(lwheel_frame, lwheel_contact_f)
+lwheel_body = RigidBody('lwheel_body', lwheel_masscenter, lwheel_frame, wheel_mass, (lwheel_inertia, lwheel_masscenter))
+lwheel_contact_point = lwheel_masscenter.locatenew('lwheel_contact_point', ground_direction_vector*wheel_radius)
+lwheel_contact_point.v2pt_theory(lwheel_masscenter,N,lwheel_frame)
 
 # Add lwheel to eqns
 q_list.append(lwheel_theta)
 u_list.append(lwheel_omega)
-force_list.append((lwheel_masscenter, lwheel_mass*gravity*N.z))
-force_list.append((lwheel_contact_point, lwheel_contact_force))
+force_list.append((lwheel_masscenter, wheel_mass*gravity*N.z))
+force_list.append((lwheel_contact_point, vector_in_frame(N,lwheel_contact_force)))
 kde_list.append(lwheel_theta_dot-lwheel_omega)
 body_list.append(lwheel_body)
 
+# Define rwheel
+rwheel_frame = ReferenceFrame('rwheel_frame')
+rwheel_frame.orient(cart_frame, 'Axis', [rwheel_theta, cart_frame.y])
+rwheel_inertia = inertia(rwheel_frame, 1., 1., 1.)
+rwheel_masscenter = cart_masscenter.locatenew('rwheel_masscenter', 0.5*wheel_base*cart_frame.y)
+rwheel_masscenter.v2pt_theory(cart_masscenter, N, rwheel_frame)
+rwheel_body = RigidBody('rwheel_body', rwheel_masscenter, rwheel_frame, wheel_mass, (rwheel_inertia, rwheel_masscenter))
+rwheel_contact_point = rwheel_masscenter.locatenew('rwheel_contact_point', ground_direction_vector*wheel_radius)
+rwheel_contact_point.v2pt_theory(rwheel_masscenter,N,rwheel_frame)
+
+# Add rwheel to eqns
+q_list.append(rwheel_theta)
+u_list.append(rwheel_omega)
+force_list.append((rwheel_masscenter, wheel_mass*gravity*N.z))
+force_list.append((rwheel_contact_point, vector_in_frame(N,rwheel_contact_force)))
+kde_list.append(rwheel_theta_dot-rwheel_omega)
+body_list.append(rwheel_body)
 
 KM = KanesMethod(N, q_ind=q_list, u_ind=u_list, kd_eqs=kde_list)
 KM.kanes_equations(force_list, body_list)
@@ -101,24 +125,27 @@ kdd = KM.kindiffdict()
 mm = KM.mass_matrix_full
 fo = KM.forcing_full
 
-subx, outx = cse([mm,fo])
-mm = outx[0]
-fo = outx[1]
+rwheel_contact_pos = Matrix(simplify(rwheel_contact_point.pos_from(O).to_matrix(N)))
+rwheel_contact_vel = Matrix(simplify(rwheel_contact_point.vel(N).to_matrix(N)))
+lwheel_contact_pos = Matrix(simplify(lwheel_contact_point.pos_from(O).to_matrix(N)))
+lwheel_contact_vel = Matrix(simplify(lwheel_contact_point.vel(N).to_matrix(N)))
+
+subx, outx = cse([mm, fo, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel])
+mm, fo, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel = tuple(outx)
+
 mm = Matrix(simplify(mm))
 fo = Matrix(simplify(fo))
-print(count_ops(mm) + count_ops(fo) + count_ops(subx))
+
 eom = mm.LUsolve(fo)
-#print(simplify(eom))
-eom_subx, eom = cse(eom)
+
+eom_subx, outx = cse([eom])
+eom = outx[0]
 subx = subx+eom_subx
 print(count_ops(eom)+count_ops(subx))
 
-#subx,eom = cse(eom)
-#print(count_ops(eom)+count_ops(subx))
-#pprint(eom)
-#mechanics_printing()
-#mprint(eom)
-
+with open('out.srepr', 'wb') as f:
+    f.truncate()
+    f.write(srepr({'q_list':q_list, 'u_list':u_list, 'subx':subx, 'eom':eom, 'rwheel_contact_pos':rwheel_contact_pos, 'rwheel_contact_vel':rwheel_contact_vel, 'lwheel_contact_pos':lwheel_contact_pos, 'lwheel_contact_vel':lwheel_contact_vel}).encode('utf8'))
 
 
 
