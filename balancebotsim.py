@@ -2,6 +2,10 @@ from helpers import *
 from sympy import *
 from sympy.physics.mechanics import *
 
+# Define constants
+pole_suspension_omega = 1.0
+pole_suspension_zeta = 0.4
+
 kde_list = []
 force_list = []
 body_list = []
@@ -29,6 +33,7 @@ pole_theta = dynamicsymbols('pole_theta', 0)
 pole_theta_dot = dynamicsymbols('pole_theta', 1)
 pole_omega = dynamicsymbols('pole_omega')
 
+
 # Define wheel symbols
 wheel_mass = Symbol('wheel_mass')
 wheel_radius = Symbol('wheel_radius')
@@ -39,12 +44,14 @@ lwheel_theta = dynamicsymbols('lwheel_theta', 0)
 lwheel_theta_dot = dynamicsymbols('lwheel_theta', 1)
 lwheel_omega = dynamicsymbols('lwheel_omega')
 lwheel_contact_force = Matrix(dynamicsymbols('lwheel_contact_force[0:3]'))
+lwheel_motor_torque = dynamicsymbols('lwheel_motor_torque')
 
 # Define rwheel symbols
 rwheel_theta = dynamicsymbols('rwheel_theta', 0)
 rwheel_theta_dot = dynamicsymbols('rwheel_theta', 1)
 rwheel_omega = dynamicsymbols('rwheel_omega')
 rwheel_contact_force = Matrix(dynamicsymbols('rwheel_contact_force[0:3]'))
+rwheel_motor_torque = dynamicsymbols('rwheel_motor_torque')
 
 # Define cart
 cart_frame = ReferenceFrame('cart_frame')
@@ -72,10 +79,17 @@ pole_masscenter = cart_masscenter.locatenew('pole_masscenter', -0.5*pole_length*
 pole_masscenter.v2pt_theory(cart_masscenter, N, pole_frame)
 pole_body = RigidBody('pole_body', pole_masscenter, pole_frame, pole_mass, (pole_inertia, pole_masscenter))
 
+# Define suspension constants
+pole_suspension_m = (pole_inertia+inertia_of_point_mass(pole_mass, pole_masscenter.pos_from(cart_masscenter), pole_frame)).dot(pole_frame.x).to_matrix(pole_frame)[0]
+pole_suspension_k = pole_suspension_m*pole_suspension_omega**2
+pole_suspension_c = 2.*pole_suspension_zeta*sqrt(pole_suspension_k*pole_suspension_m)
+
 # Add pole to eqns
 q_list.append(pole_theta)
 u_list.append(pole_omega)
 force_list.append((pole_masscenter, pole_mass*gravity*N.z))
+force_list.append((pole_frame, (-pole_suspension_k*pole_theta + -pole_suspension_c*pole_omega)*pole_frame.x))
+force_list.append((cart_frame, -(-pole_suspension_k*pole_theta + -pole_suspension_c*pole_omega)*pole_frame.x))
 kde_list.append(pole_theta_dot-pole_omega)
 body_list.append(pole_body)
 
@@ -98,6 +112,8 @@ q_list.append(lwheel_theta)
 u_list.append(lwheel_omega)
 force_list.append((lwheel_masscenter, wheel_mass*gravity*N.z))
 force_list.append((lwheel_contact_point, vector_in_frame(N,lwheel_contact_force)))
+force_list.append((lwheel_frame, lwheel_motor_torque*lwheel_frame.y))
+force_list.append((cart_frame, -lwheel_motor_torque*lwheel_frame.y))
 kde_list.append(lwheel_theta_dot-lwheel_omega)
 body_list.append(lwheel_body)
 
@@ -116,6 +132,8 @@ q_list.append(rwheel_theta)
 u_list.append(rwheel_omega)
 force_list.append((rwheel_masscenter, wheel_mass*gravity*N.z))
 force_list.append((rwheel_contact_point, vector_in_frame(N,rwheel_contact_force)))
+force_list.append((rwheel_frame, rwheel_motor_torque*rwheel_frame.y))
+force_list.append((cart_frame, -rwheel_motor_torque*rwheel_frame.y))
 kde_list.append(rwheel_theta_dot-rwheel_omega)
 body_list.append(rwheel_body)
 
@@ -130,14 +148,18 @@ rwheel_contact_vel = Matrix(simplify(rwheel_contact_point.vel(N).to_matrix(N)))
 lwheel_contact_pos = Matrix(simplify(lwheel_contact_point.pos_from(O).to_matrix(N)))
 lwheel_contact_vel = Matrix(simplify(lwheel_contact_point.vel(N).to_matrix(N)))
 
+print(".")
 subx, outx = cse([mm, fo, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel])
 mm, fo, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel = tuple(outx)
 
+print(".")
 mm = Matrix(simplify(mm))
 fo = Matrix(simplify(fo))
 
+print(".")
 eom = mm.LUsolve(fo)
 
+print(".")
 eom_subx, outx = cse([eom])
 eom = outx[0]
 subx = subx+eom_subx
