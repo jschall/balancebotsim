@@ -26,7 +26,10 @@ def extractSubexpressions(inexprs, prefix='X', threshold=0, prev_subx=[]):
 
     for i in reversed(range(len(subexprs))):
         from sympy.logic.boolalg import Boolean
-        ops_saved = (count_subexpression(subexprs[i][0], [[x[1] for x in subexprs], outexprs])-1)*subexprs[i][1].count_ops()
+        if threshold == 0:
+            ops_saved = 1
+        else:
+            ops_saved = (count_subexpression(subexprs[i][0], [[x[1] for x in subexprs], outexprs])-1)*subexprs[i][1].count_ops()
         if ops_saved < threshold or isinstance(subexprs[i][1], Boolean):
             sub = dict([subexprs.pop(i)])
             subexprs = [(x[0],x[1].xreplace(sub)) for x in subexprs]

@@ -3,15 +3,15 @@ from sympy import *
 from sympy.physics.mechanics import *
 
 # Define constants
-pole_length = 2.0
-pole_mass = 1.0
+gravity = 9.80655
+pole_suspension_omega = 2. * 2.*pi
+pole_suspension_zeta = 0.4
+pole_length = 1.83
+pole_mass = 0.39
 cart_mass = 1.0
-wheel_mass = 1.0
+wheel_mass = 0.1
 wheel_radius = .1
 wheel_base = .2
-pole_suspension_omega = 1.0
-pole_suspension_zeta = 0.4
-gravity = 9.80655
 
 kde_list = []
 force_list = []
@@ -147,8 +147,10 @@ fo = KM.forcing_full
 
 mm, fo, subx = extractSubexpressions([mm,fo], 'subx')
 
-eom = mm.LUsolve(fo)
+mm = simplify(mm).as_mutable()
+fo = simplify(fo).as_mutable()
 
+eom = mm.LUsolve(fo)
 
 eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel, subx = extractSubexpressions([eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel], 'subx', prev_subx=subx)
 
