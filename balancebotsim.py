@@ -60,10 +60,10 @@ cart_masscenter.set_vel(N, vector_in_frame(N, cart_vel))
 cart_body = RigidBody('cart_body', cart_masscenter, cart_frame, cart_mass, (cart_inertia, cart_masscenter))
 
 # Add cart to eqns
-q_list.extend(list(cart_pos))
-u_list.extend(list(cart_vel))
 q_list.extend(list(cart_quat))
 u_list.extend(list(cart_ang_vel))
+q_list.extend(list(cart_pos))
+u_list.extend(list(cart_vel))
 force_list.append((cart_masscenter, cart_mass*gravity*N.z))
 kde_list.extend(list(cart_pos_dot-cart_vel)+list(cart_quat_dot-quatderiv(cart_quat, cart_ang_vel)))
 body_list.append(cart_body)
@@ -147,13 +147,12 @@ fo = KM.forcing_full
 
 eom = mm.LUsolve(fo)
 
-#print(count_ops(eom))
 subx, outx = cse([eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel], order='none')
 eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel = tuple(outx)
 
 with open('out.srepr', 'wb') as f:
     f.truncate()
-    f.write(srepr({'q_list':q_list, 'u_list':u_list, 'subx':subx, 'eom':eom, 'rwheel_contact_pos':rwheel_contact_pos, 'rwheel_contact_vel':rwheel_contact_vel, 'lwheel_contact_pos':lwheel_contact_pos, 'lwheel_contact_vel':lwheel_contact_vel}).encode('utf8'))
+    f.write(srepr({'subx':subx, 'eom':eom, 'rwheel_contact_pos':rwheel_contact_pos, 'rwheel_contact_vel':rwheel_contact_vel, 'lwheel_contact_pos':lwheel_contact_pos, 'lwheel_contact_vel':lwheel_contact_vel}).encode('utf8'))
 
 
 
