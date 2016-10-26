@@ -3,8 +3,15 @@ from sympy import *
 from sympy.physics.mechanics import *
 
 # Define constants
+pole_length = 2.0
+pole_mass = 1.0
+cart_mass = 1.0
+wheel_mass = 1.0
+wheel_radius = .1
+wheel_base = .2
 pole_suspension_omega = 1.0
 pole_suspension_zeta = 0.4
+gravity = 9.80655
 
 kde_list = []
 force_list = []
@@ -15,43 +22,33 @@ u_list = []
 N = ReferenceFrame('N')
 O = Point('O')
 O.set_vel(N, 0)
-gravity = Symbol('g')
 
 # Define cart symbols
-cart_mass = Symbol('cart_mass')
-cart_pos = Matrix(dynamicsymbols('cart_pos[0:3]', 0))
-cart_pos_dot = Matrix(dynamicsymbols('cart_pos[0:3]', 1))
-cart_vel = Matrix(dynamicsymbols('cart_vel[0:3]', 0))
-cart_quat = Matrix(dynamicsymbols('cart_quat[0:4]', 0))
-cart_quat_dot = Matrix(dynamicsymbols('cart_quat[0:4]', 1))
-cart_ang_vel = Matrix(dynamicsymbols('cart_omega[0:3]'))
+cart_quat = Matrix(dynamicsymbols('q0:4', 0))
+cart_quat_dot = Matrix(dynamicsymbols('q0:4', 1))
+cart_ang_vel = Matrix(dynamicsymbols('u0:3'))
+cart_pos = Matrix(dynamicsymbols('q4:7', 0))
+cart_pos_dot = Matrix(dynamicsymbols('q4:7', 1))
+cart_vel = Matrix(dynamicsymbols('u3:6', 0))
 
 # Define pole symbols
-pole_length = Symbol('pole_length')
-pole_mass = Symbol('pole_mass')
-pole_theta = dynamicsymbols('pole_theta', 0)
-pole_theta_dot = dynamicsymbols('pole_theta', 1)
-pole_omega = dynamicsymbols('pole_omega')
-
-
-# Define wheel symbols
-wheel_mass = Symbol('wheel_mass')
-wheel_radius = Symbol('wheel_radius')
-wheel_base = Symbol('wheel_base')
+pole_theta = dynamicsymbols('q7', 0)
+pole_theta_dot = dynamicsymbols('q7', 1)
+pole_omega = dynamicsymbols('u6')
 
 # Define lwheel symbols
-lwheel_theta = dynamicsymbols('lwheel_theta', 0)
-lwheel_theta_dot = dynamicsymbols('lwheel_theta', 1)
-lwheel_omega = dynamicsymbols('lwheel_omega')
-lwheel_contact_force = Matrix(dynamicsymbols('lwheel_contact_force[0:3]'))
-lwheel_motor_torque = dynamicsymbols('lwheel_motor_torque')
+lwheel_theta = dynamicsymbols('q8', 0)
+lwheel_theta_dot = dynamicsymbols('q8', 1)
+lwheel_omega = dynamicsymbols('u7')
+lwheel_contact_force = Matrix(dynamicsymbols('f0:3'))
+lwheel_motor_torque = dynamicsymbols('f4')
 
 # Define rwheel symbols
-rwheel_theta = dynamicsymbols('rwheel_theta', 0)
-rwheel_theta_dot = dynamicsymbols('rwheel_theta', 1)
-rwheel_omega = dynamicsymbols('rwheel_omega')
-rwheel_contact_force = Matrix(dynamicsymbols('rwheel_contact_force[0:3]'))
-rwheel_motor_torque = dynamicsymbols('rwheel_motor_torque')
+rwheel_theta = dynamicsymbols('q9', 0)
+rwheel_theta_dot = dynamicsymbols('q9', 1)
+rwheel_omega = dynamicsymbols('u8')
+rwheel_contact_force = Matrix(dynamicsymbols('f4:7'))
+rwheel_motor_torque = dynamicsymbols('f7')
 
 # Define cart
 cart_frame = ReferenceFrame('cart_frame')
@@ -137,33 +134,22 @@ force_list.append((cart_frame, -rwheel_motor_torque*rwheel_frame.y))
 kde_list.append(rwheel_theta_dot-rwheel_omega)
 body_list.append(rwheel_body)
 
+rwheel_contact_pos = rwheel_contact_point.pos_from(O).to_matrix(N)
+rwheel_contact_vel = rwheel_contact_point.vel(N).to_matrix(N)
+lwheel_contact_pos = lwheel_contact_point.pos_from(O).to_matrix(N)
+lwheel_contact_vel = lwheel_contact_point.vel(N).to_matrix(N)
+
 KM = KanesMethod(N, q_ind=q_list, u_ind=u_list, kd_eqs=kde_list)
 KM.kanes_equations(force_list, body_list)
 kdd = KM.kindiffdict()
 mm = KM.mass_matrix_full
 fo = KM.forcing_full
 
-rwheel_contact_pos = Matrix(simplify(rwheel_contact_point.pos_from(O).to_matrix(N)))
-rwheel_contact_vel = Matrix(simplify(rwheel_contact_point.vel(N).to_matrix(N)))
-lwheel_contact_pos = Matrix(simplify(lwheel_contact_point.pos_from(O).to_matrix(N)))
-lwheel_contact_vel = Matrix(simplify(lwheel_contact_point.vel(N).to_matrix(N)))
-
-print(".")
-subx, outx = cse([mm, fo, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel])
-mm, fo, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel = tuple(outx)
-
-print(".")
-mm = Matrix(simplify(mm))
-fo = Matrix(simplify(fo))
-
-print(".")
 eom = mm.LUsolve(fo)
 
-print(".")
-eom_subx, outx = cse([eom])
-eom = outx[0]
-subx = subx+eom_subx
-print(count_ops(eom)+count_ops(subx))
+#print(count_ops(eom))
+subx, outx = cse([eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel], order='none')
+eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel = tuple(outx)
 
 with open('out.srepr', 'wb') as f:
     f.truncate()
