@@ -145,10 +145,14 @@ kdd = KM.kindiffdict()
 mm = KM.mass_matrix_full
 fo = KM.forcing_full
 
+mm, fo, subx = extractSubexpressions([mm,fo], 'subx')
+
 eom = mm.LUsolve(fo)
 
-subx, outx = cse([eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel], order='none')
-eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel = tuple(outx)
+
+eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel, subx = extractSubexpressions([eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel], 'subx', prev_subx=subx)
+
+print(count_ops([eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel, subx]))
 
 with open('out.srepr', 'wb') as f:
     f.truncate()
