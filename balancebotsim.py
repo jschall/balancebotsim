@@ -1,6 +1,7 @@
 from helpers import *
 from sympy import *
 from sympy.physics.mechanics import *
+from pydy.system import System
 
 # Define constants
 gravity = 9.80655
@@ -16,39 +17,42 @@ wheel_base = .2
 kde_list = []
 force_list = []
 body_list = []
-q_list = []
-u_list = []
+q = dynamicsymbols('q0:10')
+qd = dynamicsymbols('q0:10',1)
+u = dynamicsymbols('u0:9')
+f = dynamicsymbols('f0:8')
 
 N = ReferenceFrame('N')
 O = Point('O')
 O.set_vel(N, 0)
 
-# Define cart symbols
-cart_quat = Matrix(dynamicsymbols('q0:4', 0))
-cart_quat_dot = Matrix(dynamicsymbols('q0:4', 1))
-cart_ang_vel = Matrix(dynamicsymbols('u0:3'))
-cart_pos = Matrix(dynamicsymbols('q4:7', 0))
-cart_pos_dot = Matrix(dynamicsymbols('q4:7', 1))
-cart_vel = Matrix(dynamicsymbols('u3:6', 0))
+# Define identifiers for generalized coordinates
+cart_quat = Matrix(q[0:4])
+cart_pos = Matrix(q[4:7])
+pole_theta = q[7]
+lwheel_theta = q[8]
+rwheel_theta = q[9]
 
-# Define pole symbols
-pole_theta = dynamicsymbols('q7', 0)
-pole_theta_dot = dynamicsymbols('q7', 1)
-pole_omega = dynamicsymbols('u6')
+# Define identifiers for generalized coordinate derivatives
+cart_quat_dot = Matrix(qd[0:4])
+cart_pos_dot = Matrix(qd[4:7])
+pole_theta_dot = qd[7]
+lwheel_theta_dot = qd[8]
+rwheel_theta_dot = qd[9]
 
-# Define lwheel symbols
-lwheel_theta = dynamicsymbols('q8', 0)
-lwheel_theta_dot = dynamicsymbols('q8', 1)
-lwheel_omega = dynamicsymbols('u7')
-lwheel_contact_force = Matrix(dynamicsymbols('f0:3'))
-lwheel_motor_torque = dynamicsymbols('f4')
+# Define identifiers for generalized speeds
+cart_ang_vel = Matrix(u[0:3])
+cart_vel = Matrix(u[3:6])
+pole_omega = u[6]
+lwheel_omega = u[7]
+rwheel_omega = u[8]
 
-# Define rwheel symbols
-rwheel_theta = dynamicsymbols('q9', 0)
-rwheel_theta_dot = dynamicsymbols('q9', 1)
-rwheel_omega = dynamicsymbols('u8')
-rwheel_contact_force = Matrix(dynamicsymbols('f4:7'))
-rwheel_motor_torque = dynamicsymbols('f7')
+# Define identifiers for force inputs
+lwheel_contact_force = Matrix(f[0:3])
+lwheel_motor_torque = f[3]
+rwheel_contact_force = Matrix(f[4:7])
+rwheel_motor_torque = f[7]
+
 
 # Define cart
 cart_frame = ReferenceFrame('cart_frame')
@@ -60,10 +64,6 @@ cart_masscenter.set_vel(N, vector_in_frame(N, cart_vel))
 cart_body = RigidBody('cart_body', cart_masscenter, cart_frame, cart_mass, (cart_inertia, cart_masscenter))
 
 # Add cart to eqns
-q_list.extend(list(cart_quat))
-u_list.extend(list(cart_ang_vel))
-q_list.extend(list(cart_pos))
-u_list.extend(list(cart_vel))
 force_list.append((cart_masscenter, cart_mass*gravity*N.z))
 kde_list.extend(list(cart_pos_dot-cart_vel)+list(cart_quat_dot-quatderiv(cart_quat, cart_ang_vel)))
 body_list.append(cart_body)
@@ -82,8 +82,6 @@ pole_suspension_k = pole_suspension_m*pole_suspension_omega**2
 pole_suspension_c = 2.*pole_suspension_zeta*sqrt(pole_suspension_k*pole_suspension_m)
 
 # Add pole to eqns
-q_list.append(pole_theta)
-u_list.append(pole_omega)
 force_list.append((pole_masscenter, pole_mass*gravity*N.z))
 force_list.append((pole_frame, (-pole_suspension_k*pole_theta + -pole_suspension_c*pole_omega)*pole_frame.x))
 force_list.append((cart_frame, -(-pole_suspension_k*pole_theta + -pole_suspension_c*pole_omega)*pole_frame.x))
@@ -105,8 +103,6 @@ lwheel_contact_point = lwheel_masscenter.locatenew('lwheel_contact_point', groun
 lwheel_contact_point.v2pt_theory(lwheel_masscenter,N,lwheel_frame)
 
 # Add lwheel to eqns
-q_list.append(lwheel_theta)
-u_list.append(lwheel_omega)
 force_list.append((lwheel_masscenter, wheel_mass*gravity*N.z))
 force_list.append((lwheel_contact_point, vector_in_frame(N,lwheel_contact_force)))
 force_list.append((lwheel_frame, lwheel_motor_torque*lwheel_frame.y))
@@ -125,8 +121,6 @@ rwheel_contact_point = rwheel_masscenter.locatenew('rwheel_contact_point', groun
 rwheel_contact_point.v2pt_theory(rwheel_masscenter,N,rwheel_frame)
 
 # Add rwheel to eqns
-q_list.append(rwheel_theta)
-u_list.append(rwheel_omega)
 force_list.append((rwheel_masscenter, wheel_mass*gravity*N.z))
 force_list.append((rwheel_contact_point, vector_in_frame(N,rwheel_contact_force)))
 force_list.append((rwheel_frame, rwheel_motor_torque*rwheel_frame.y))
@@ -139,26 +133,34 @@ rwheel_contact_vel = rwheel_contact_point.vel(N).to_matrix(N)
 lwheel_contact_pos = lwheel_contact_point.pos_from(O).to_matrix(N)
 lwheel_contact_vel = lwheel_contact_point.vel(N).to_matrix(N)
 
-KM = KanesMethod(N, q_ind=q_list, u_ind=u_list, kd_eqs=kde_list)
+KM = KanesMethod(N, q_ind=q, u_ind=u, kd_eqs=kde_list)
 KM.kanes_equations(force_list, body_list)
-kdd = KM.kindiffdict()
-mm = KM.mass_matrix_full
-fo = KM.forcing_full
 
-mm, fo, subx = extractSubexpressions([mm,fo], 'subx')
+f_val = [0.,0.,0.,0.,0.,0.,0.,0.]
 
-mm = simplify(mm).as_mutable()
-fo = simplify(fo).as_mutable()
+s = System(KM, times=[0.,0.01])
+s.specifieds = {'symbols':f, 'values': f_val}
+s.generate_ode_function(generator='cython')
+print(s.integrate())
 
-eom = mm.LUsolve(fo)
+#kdd = KM.kindiffdict()
+#mm = KM.mass_matrix_full
+#fo = KM.forcing_full
 
-eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel, subx = extractSubexpressions([eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel], 'subx', prev_subx=subx)
+#mm, fo, subx = extractSubexpressions([mm,fo], 'subx')
 
-print(count_ops([eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel, subx]))
+#mm = simplify(mm).as_mutable()
+#fo = simplify(fo).as_mutable()
 
-with open('out.srepr', 'wb') as f:
-    f.truncate()
-    f.write(srepr({'subx':subx, 'eom':eom, 'rwheel_contact_pos':rwheel_contact_pos, 'rwheel_contact_vel':rwheel_contact_vel, 'lwheel_contact_pos':lwheel_contact_pos, 'lwheel_contact_vel':lwheel_contact_vel}).encode('utf8'))
+#eom = mm.LUsolve(fo)
+
+#eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel, subx = extractSubexpressions([eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel], 'subx', prev_subx=subx)
+
+#print(count_ops([eom, rwheel_contact_pos, rwheel_contact_vel, lwheel_contact_pos, lwheel_contact_vel, subx]))
+
+#with open('out.srepr', 'wb') as f:
+    #f.truncate()
+    #f.write(srepr({'subx':subx, 'eom':eom, 'rwheel_contact_pos':rwheel_contact_pos, 'rwheel_contact_vel':rwheel_contact_vel, 'lwheel_contact_pos':lwheel_contact_pos, 'lwheel_contact_vel':lwheel_contact_vel}).encode('utf8'))
 
 
 
