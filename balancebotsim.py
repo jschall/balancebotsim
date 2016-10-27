@@ -8,66 +8,64 @@ from datetime import datetime
 import numpy as np
 
 # Symbols
-c = symbols('c0:23') # Constants
-q = dynamicsymbols('q0:10')
-qd = dynamicsymbols('q0:10',1)
-u = dynamicsymbols('u0:9')
-f = dynamicsymbols('f0:2')
+const_sym = symbols('c0:23') # Constants
+q_sym = dynamicsymbols('q0:10')
+qd_sym = dynamicsymbols('q0:10',1)
+u_sym = dynamicsymbols('u0:9')
+in_sym = dynamicsymbols('in0:2')
 
 # Define identifiers for constants
-g = c[0]
-pole_suspension_freq = c[1]
-pole_suspension_zeta = c[2]
-pole_length = c[3]
-pole_mass = c[4]
-cart_mass = c[5]
-wheel_mass = c[6]
-wheel_radius = c[7]
-wheel_base = c[8]
-ground_contact_freq = c[9]
-ground_contact_zeta = c[10]
-wheel_ground_friction_coeff = c[11]
-contact_smoothing_dist = c[12]
-friction_smoothing_vel = c[13]
+g = const_sym[0]
+pole_suspension_freq = const_sym[1]
+pole_suspension_zeta = const_sym[2]
+pole_length = const_sym[3]
+pole_mass = const_sym[4]
+cart_mass = const_sym[5]
+wheel_mass = const_sym[6]
+wheel_radius = const_sym[7]
+wheel_base = const_sym[8]
+ground_contact_freq = const_sym[9]
+ground_contact_zeta = const_sym[10]
+wheel_ground_friction_coeff = const_sym[11]
+contact_smoothing_dist = const_sym[12]
+friction_smoothing_vel = const_sym[13]
 
-pole_inertia_xx = c[14]
-pole_inertia_yy = c[15]
-pole_inertia_zz = c[16]
+pole_inertia_xx = const_sym[14]
+pole_inertia_yy = const_sym[15]
+pole_inertia_zz = const_sym[16]
 
-wheel_inertia_xx = c[17]
-wheel_inertia_yy = c[18]
-wheel_inertia_zz = c[19]
+wheel_inertia_xx = const_sym[17]
+wheel_inertia_yy = const_sym[18]
+wheel_inertia_zz = const_sym[19]
 
-cart_inertia_xx = c[20]
-cart_inertia_yy = c[21]
-cart_inertia_zz = c[22]
+cart_inertia_xx = const_sym[20]
+cart_inertia_yy = const_sym[21]
+cart_inertia_zz = const_sym[22]
 
 # Define identifiers for generalized coordinates
-cart_quat = q[0:4]
-cart_pos = Matrix(q[4:7])
-pole_theta = q[7]
-lwheel_theta = q[8]
-rwheel_theta = q[9]
+cart_quat = q_sym[0:4]
+cart_pos = q_sym[4:7]
+pole_theta = q_sym[7]
+lwheel_theta = q_sym[8]
+rwheel_theta = q_sym[9]
 
 # Define identifiers for generalized coordinate derivatives
-cart_quat_dot = qd[0:4]
-cart_pos_dot = Matrix(qd[4:7])
-pole_theta_dot = qd[7]
-lwheel_theta_dot = qd[8]
-rwheel_theta_dot = qd[9]
+cart_quat_dot = qd_sym[0:4]
+cart_pos_dot = qd_sym[4:7]
+pole_theta_dot = qd_sym[7]
+lwheel_theta_dot = qd_sym[8]
+rwheel_theta_dot = qd_sym[9]
 
 # Define identifiers for generalized speeds
-cart_ang_vel = u[0:3]
-cart_vel = Matrix(u[3:6])
-pole_omega = u[6]
-lwheel_omega = u[7]
-rwheel_omega = u[8]
+cart_ang_vel = u_sym[0:3]
+cart_vel = u_sym[3:6]
+pole_omega = u_sym[6]
+lwheel_omega = u_sym[7]
+rwheel_omega = u_sym[8]
 
 # Define identifiers for force inputs
-lwheel_motor_torque = f[0]
-rwheel_motor_torque = f[1]
-#lwheel_contact_force = Matrix(f[2:5])
-#rwheel_contact_force = Matrix(f[5:8])
+lwheel_motor_torque = in_sym[0]
+rwheel_motor_torque = in_sym[1]
 
 # Define newtonian reference frame and origin, gravity
 N = ReferenceFrame('N')
@@ -76,9 +74,9 @@ O.set_vel(N, 0)
 gravity = g*N.z
 
 # Define lists of kinematic equations, forces and bodies that will be appended to
-kde_list = []
-force_list = []
-body_list = []
+kdes = []
+forces = []
+bodies = []
 
 # Define contact model constants
 total_mass = pole_mass+cart_mass+wheel_mass*2
@@ -96,9 +94,12 @@ cart_masscenter.set_vel(N, vector_in_frame(N, cart_vel))
 cart_body = RigidBody('cart_body', cart_masscenter, cart_frame, cart_mass, (cart_inertia, cart_masscenter))
 
 # Add cart to eqns
-force_list.append((cart_masscenter, cart_mass*gravity))
-kde_list.extend(list(cart_pos_dot-cart_vel)+kinematic_equations(cart_ang_vel, cart_quat, 'quaternion'))
-body_list.append(cart_body)
+forces.append((cart_masscenter, cart_mass*gravity))
+kdes.append(cart_pos_dot[0]-cart_vel[0])
+kdes.append(cart_pos_dot[1]-cart_vel[1])
+kdes.append(cart_pos_dot[2]-cart_vel[2])
+kdes.extend(kinematic_equations(cart_ang_vel, cart_quat, 'quaternion'))
+bodies.append(cart_body)
 
 # Define pole
 pole_frame = ReferenceFrame('pole_frame')
@@ -119,12 +120,12 @@ pole_suspension_k = pole_suspension_m*(pole_suspension_freq * 2.*pi)**2
 pole_suspension_c = 2.*pole_suspension_zeta*sqrt(pole_suspension_k*pole_suspension_m)
 
 # Add pole to eqns
-force_list.append((pole_masscenter, pole_mass*gravity))
-force_list.append((pole_frame, (-pole_suspension_k*pole_theta + -pole_suspension_c*pole_omega)*pole_frame.x))
-force_list.append((cart_frame, -(-pole_suspension_k*pole_theta + -pole_suspension_c*pole_omega)*pole_frame.x))
-force_list.append((pole_top_point, N.z*pole_top_ground_normal_force))
-kde_list.append(pole_theta_dot-pole_omega)
-body_list.append(pole_body)
+forces.append((pole_masscenter, pole_mass*gravity))
+forces.append((pole_frame, (-pole_suspension_k*pole_theta + -pole_suspension_c*pole_omega)*pole_frame.x))
+forces.append((cart_frame, -(-pole_suspension_k*pole_theta + -pole_suspension_c*pole_omega)*pole_frame.x))
+forces.append((pole_top_point, N.z*pole_top_ground_normal_force))
+kdes.append(pole_theta_dot-pole_omega)
+bodies.append(pole_body)
 
 # Define the ground direction vector
 # This is done by subtracting the component of the N.z vector along cart_frame.y from N.z, resulting in only the component in the cart_frame x-z plane, and normalizing
@@ -143,18 +144,15 @@ lwheel_contact_pos = lwheel_contact_point.pos_from(O).to_matrix(N)
 lwheel_contact_vel = lwheel_contact_point.vel(N).to_matrix(N).subs(lwheel_theta_dot, lwheel_omega) # TODO: Why is this subs necessary?
 lwheel_contact_force = zeros(3)
 lwheel_contact_force[2] = (-ground_contact_k*lwheel_contact_pos[2] + -ground_contact_c*lwheel_contact_vel[2])*contact(lwheel_contact_pos[2], contact_smoothing_dist)
-# TODO: stiction model, apply friction in the correct direction
-lwheel_contact_force[0] = wheel_ground_friction_coeff*abs(lwheel_contact_force[2])*erf(-lwheel_contact_vel[0]/friction_smoothing_vel)
-lwheel_contact_force[1] = wheel_ground_friction_coeff*abs(lwheel_contact_force[2])*erf(-lwheel_contact_vel[1]/friction_smoothing_vel)
-
+lwheel_contact_force[0:2,0] = traction_force(wheel_ground_friction_coeff, lwheel_contact_vel[0:2,0], lwheel_contact_force[2], friction_smoothing_vel)
 
 # Add lwheel to eqns
-force_list.append((lwheel_masscenter, wheel_mass*gravity))
-force_list.append((lwheel_contact_point, vector_in_frame(N, lwheel_contact_force)))
-force_list.append((lwheel_frame, lwheel_motor_torque*lwheel_frame.y))
-force_list.append((cart_frame, -lwheel_motor_torque*lwheel_frame.y))
-kde_list.append(lwheel_theta_dot-lwheel_omega)
-body_list.append(lwheel_body)
+forces.append((lwheel_masscenter, wheel_mass*gravity))
+forces.append((lwheel_contact_point, vector_in_frame(N, lwheel_contact_force)))
+forces.append((lwheel_frame, lwheel_motor_torque*lwheel_frame.y))
+forces.append((cart_frame, -lwheel_motor_torque*lwheel_frame.y))
+kdes.append(lwheel_theta_dot-lwheel_omega)
+bodies.append(lwheel_body)
 
 # Define rwheel
 rwheel_frame = ReferenceFrame('rwheel_frame')
@@ -169,21 +167,19 @@ rwheel_contact_pos = rwheel_contact_point.pos_from(O).to_matrix(N)
 rwheel_contact_vel = rwheel_contact_point.vel(N).to_matrix(N).subs(rwheel_theta_dot, rwheel_omega) # TODO: Why is this subs necessary?
 rwheel_contact_force = zeros(3)
 rwheel_contact_force[2] = (-ground_contact_k*rwheel_contact_pos[2] + -ground_contact_c*rwheel_contact_vel[2])*contact(rwheel_contact_pos[2], contact_smoothing_dist)
-# TODO: stiction model, apply friction in the correct direction
-rwheel_contact_force[0] = wheel_ground_friction_coeff*abs(lwheel_contact_force[2])*erf(-rwheel_contact_vel[0]/friction_smoothing_vel)
-rwheel_contact_force[1] = wheel_ground_friction_coeff*abs(lwheel_contact_force[2])*erf(-rwheel_contact_vel[1]/friction_smoothing_vel)
+rwheel_contact_force[0:2,0] = traction_force(wheel_ground_friction_coeff, rwheel_contact_vel[0:2,0], rwheel_contact_force[2], friction_smoothing_vel)
 
 # Add rwheel to eqns
-force_list.append((rwheel_masscenter, wheel_mass*gravity))
-force_list.append((rwheel_contact_point, vector_in_frame(N, rwheel_contact_force)))
-force_list.append((rwheel_frame, rwheel_motor_torque*rwheel_frame.y))
-force_list.append((cart_frame, -rwheel_motor_torque*rwheel_frame.y))
-kde_list.append(rwheel_theta_dot-rwheel_omega)
-body_list.append(rwheel_body)
+forces.append((rwheel_masscenter, wheel_mass*gravity))
+forces.append((rwheel_contact_point, vector_in_frame(N, rwheel_contact_force)))
+forces.append((rwheel_frame, rwheel_motor_torque*rwheel_frame.y))
+forces.append((cart_frame, -rwheel_motor_torque*rwheel_frame.y))
+kdes.append(rwheel_theta_dot-rwheel_omega)
+bodies.append(rwheel_body)
 
 # Set constants
 constants = {
-        g: 9.80655,
+        g: 9.80665,
         pole_suspension_freq: 2.,
         pole_suspension_zeta: 0.4,
         pole_length: 1.83,
@@ -213,13 +209,14 @@ constants.update({
         cart_inertia_zz: tube_inertia_xx_yy(cart_mass, wheel_base, wheel_radius*0.3, wheel_radius*0.9).xreplace(constants)
         })
 
-undefconsts = set(c)-set(constants.keys())
+undefconsts = set(const_sym)-set(constants.keys())
 assert not undefconsts, 'undefined constants %s' % (undefconsts,)
 
-KM = KanesMethod(N, q_ind=q, u_ind=u, kd_eqs=kde_list)
-KM.kanes_equations(body_list, force_list)
+KM = KanesMethod(N, q_ind=q_sym, u_ind=u_sym, kd_eqs=kdes)
+KM.kanes_equations(forces, bodies)
 
-s = System(KM, times=np.linspace(0,5,5000))
+t_sim = 100
+s = System(KM, times=np.linspace(0,t_sim,t_sim*1000))
 
 s.constants=constants
 
@@ -241,12 +238,6 @@ s.initial_conditions = {
 s.specifieds = {
         lwheel_motor_torque: 0.,
         rwheel_motor_torque: 0.,
-        #lwheel_contact_force[0]: 0.,
-        #lwheel_contact_force[1]: 0.,
-        #lwheel_contact_force[2]: 0.,
-        #rwheel_contact_force[0]: 0.,
-        #rwheel_contact_force[1]: 0.,
-        #rwheel_contact_force[2]: 0.
     }
 
 s.generate_ode_function(generator='cython')

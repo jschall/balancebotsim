@@ -5,9 +5,11 @@ def contact(dist, smoothing_dist):
     # "smoothed" step function
     return (1.+erf(dist/smoothing_dist))*0.5
 
-def friction(kinetic_coeff, vel, smoothing_vel):
-    # TODO needs to model stiction
-    return kinetic_coeff*erf(-vel/smoothing_vel)
+def traction_force(kinetic_friction_coeff, contact_vel, normal_force, smoothing_vel):
+    # TODO: stiction model
+    magnitude = kinetic_friction_coeff*abs(normal_force)*erf(contact_vel.norm()/smoothing_vel)
+    direction = -contact_vel / Piecewise((contact_vel.norm(), contact_vel.norm() > 0.), (1.,True))
+    return magnitude*direction
 
 def quat_multiply(q1, q2):
     return Matrix([q1[0]*q2[0] - q1[1]*q2[1] - q1[2]*q2[2] - q1[3]*q2[3],
