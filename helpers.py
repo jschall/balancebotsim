@@ -1,6 +1,14 @@
 from sympy import *
 import math
 
+def contact(dist, smoothing_dist):
+    # "smoothed" step function
+    return (1.+erf(dist/smoothing_dist))*0.5
+
+def friction(kinetic_coeff, vel, smoothing_vel):
+    # TODO needs to model stiction
+    return kinetic_coeff*erf(-vel/smoothing_vel)
+
 def quat_multiply(q1, q2):
     return Matrix([q1[0]*q2[0] - q1[1]*q2[1] - q1[2]*q2[2] - q1[3]*q2[3],
                    q1[0]*q2[1] + q1[1]*q2[0] + q1[2]*q2[3] - q1[3]*q2[2],
