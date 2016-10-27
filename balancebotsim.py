@@ -8,11 +8,11 @@ from datetime import datetime
 import numpy as np
 
 # Symbols
-c = symbols('c0:9') # Constants
+c = symbols('c0:11') # Constants
 q = dynamicsymbols('q0:10')
 qd = dynamicsymbols('q0:10',1)
 u = dynamicsymbols('u0:9')
-f = dynamicsymbols('f0:8')
+f = dynamicsymbols('f0:2')
 
 # Define identifiers for constants
 gravity = c[0]
@@ -24,6 +24,8 @@ cart_mass = c[5]
 wheel_mass = c[6]
 wheel_radius = c[7]
 wheel_base = c[8]
+wheel_contact_freq = c[9]
+wheel_contact_zeta = c[10]
 
 # Define identifiers for generalized coordinates
 cart_quat = Matrix(q[0:4])
@@ -49,8 +51,8 @@ rwheel_omega = u[8]
 # Define identifiers for force inputs
 lwheel_motor_torque = f[0]
 rwheel_motor_torque = f[1]
-lwheel_contact_force = Matrix(f[2:5])
-rwheel_contact_force = Matrix(f[5:8])
+#lwheel_contact_force = Matrix(f[2:5])
+#rwheel_contact_force = Matrix(f[5:8])
 
 # Define newtonian reference frame and origin
 N = ReferenceFrame('N')
@@ -100,6 +102,12 @@ body_list.append(pole_body)
 # This is done by subtracting the component of the N.z vector along cart_frame.y from N.z, resulting in only the component in the cart_frame x-z plane, and normalizing
 ground_direction_vector = (N.z - N.z.dot(cart_frame.y)*cart_frame.y).normalize()
 
+# Define contact model constants
+total_mass = pole_mass+cart_mass+wheel_mass*2
+wheel_contact_m = total_mass
+wheel_contact_k = wheel_contact_m*(wheel_contact_freq * 2.*pi)**2
+wheel_contact_c = 2.*wheel_contact_zeta*sqrt(wheel_contact_k*wheel_contact_m)
+
 # Define lwheel
 lwheel_frame = ReferenceFrame('lwheel_frame')
 lwheel_frame.orient(cart_frame, 'Axis', [lwheel_theta, cart_frame.y])
@@ -109,10 +117,16 @@ lwheel_masscenter.v2pt_theory(cart_masscenter, N, lwheel_frame)
 lwheel_body = RigidBody('lwheel_body', lwheel_masscenter, lwheel_frame, wheel_mass, (lwheel_inertia, lwheel_masscenter))
 lwheel_contact_point = lwheel_masscenter.locatenew('lwheel_contact_point', ground_direction_vector*wheel_radius)
 lwheel_contact_point.v2pt_theory(lwheel_masscenter,N,lwheel_frame)
+lwheel_contact_pos = lwheel_contact_point.pos_from(O).to_matrix(N)
+lwheel_contact_vel = lwheel_contact_point.vel(N).to_matrix(N)
+lwheel_normal_force = Piecewise(
+    (-wheel_contact_k*lwheel_contact_pos[2] + -wheel_contact_c*lwheel_contact_vel[2], lwheel_contact_pos[2] > 0),
+    (0., True),
+    )
 
 # Add lwheel to eqns
 force_list.append((lwheel_masscenter, wheel_mass*gravity*N.z))
-force_list.append((lwheel_contact_point, vector_in_frame(N,lwheel_contact_force)))
+force_list.append((lwheel_contact_point, N.z*lwheel_normal_force))
 force_list.append((lwheel_frame, lwheel_motor_torque*lwheel_frame.y))
 force_list.append((cart_frame, -lwheel_motor_torque*lwheel_frame.y))
 kde_list.append(lwheel_theta_dot-lwheel_omega)
@@ -127,38 +141,40 @@ rwheel_masscenter.v2pt_theory(cart_masscenter, N, rwheel_frame)
 rwheel_body = RigidBody('rwheel_body', rwheel_masscenter, rwheel_frame, wheel_mass, (rwheel_inertia, rwheel_masscenter))
 rwheel_contact_point = rwheel_masscenter.locatenew('rwheel_contact_point', ground_direction_vector*wheel_radius)
 rwheel_contact_point.v2pt_theory(rwheel_masscenter,N,rwheel_frame)
+rwheel_contact_pos = rwheel_contact_point.pos_from(O).to_matrix(N)
+rwheel_contact_vel = rwheel_contact_point.vel(N).to_matrix(N)
+rwheel_normal_force = Piecewise(
+    (-wheel_contact_k*rwheel_contact_pos[2] + -wheel_contact_c*rwheel_contact_vel[2], rwheel_contact_pos[2] > 0),
+    (0., True),
+    )
 
 # Add rwheel to eqns
 force_list.append((rwheel_masscenter, wheel_mass*gravity*N.z))
-force_list.append((rwheel_contact_point, vector_in_frame(N,rwheel_contact_force)))
+force_list.append((rwheel_contact_point, N.z*rwheel_normal_force))
 force_list.append((rwheel_frame, rwheel_motor_torque*rwheel_frame.y))
 force_list.append((cart_frame, -rwheel_motor_torque*rwheel_frame.y))
 kde_list.append(rwheel_theta_dot-rwheel_omega)
 body_list.append(rwheel_body)
 
-#rwheel_contact_pos = rwheel_contact_point.pos_from(O).to_matrix(N)
-#rwheel_contact_vel = rwheel_contact_point.vel(N).to_matrix(N)
-#lwheel_contact_pos = lwheel_contact_point.pos_from(O).to_matrix(N)
-#lwheel_contact_vel = lwheel_contact_point.vel(N).to_matrix(N)
-
 KM = KanesMethod(N, q_ind=q, u_ind=u, kd_eqs=kde_list)
 KM.kanes_equations(force_list, body_list)
 
-s = System(KM, times=np.linspace(0,1,2))
+s = System(KM, times=np.linspace(0,5,5000))
 
 s.initial_conditions = {
-        cart_quat[0]: 1.
+        cart_quat[0]: 1.,
+        pole_theta: 0.
     }
 
 s.specifieds = {
         lwheel_motor_torque: 0.,
         rwheel_motor_torque: 0.,
-        lwheel_contact_force[0]: 0.,
-        lwheel_contact_force[1]: 0.,
-        lwheel_contact_force[2]: 0.,
-        rwheel_contact_force[0]: 0.,
-        rwheel_contact_force[1]: 0.,
-        rwheel_contact_force[2]: 0.
+        #lwheel_contact_force[0]: 0.,
+        #lwheel_contact_force[1]: 0.,
+        #lwheel_contact_force[2]: 0.,
+        #rwheel_contact_force[0]: 0.,
+        #rwheel_contact_force[1]: 0.,
+        #rwheel_contact_force[2]: 0.
     }
 
 s.constants = {
@@ -170,13 +186,18 @@ s.constants = {
         cart_mass: 1.0,
         wheel_mass: 0.1,
         wheel_radius: .1,
-        wheel_base: .2
+        wheel_base: .2,
+        wheel_contact_freq: 10.,
+        wheel_contact_zeta: 0.4
     }
 
+s.generate_ode_function(generator='cython')
 
+print(1)
 result = s.integrate()
+print(1)
 
-for x in result:
-    print('\n')
-    for l in zip(q+u, x):
-        print(l)
+import matplotlib.pyplot as plt
+t = s.times
+plt.plot(t,[x[6] for x in result],t,[x[7] for x in result])
+plt.show()
