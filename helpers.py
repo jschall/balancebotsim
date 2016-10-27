@@ -59,3 +59,9 @@ def extractSubexpressions(inexprs, prefix='X', threshold=0, prev_subx=[]):
     outexprs = [x.as_mutable() if type(x) is ImmutableDenseMatrix else x for x in outexprs]
 
     return tuple(outexprs+[subexprs])
+
+def tube_inertia_xx_yy(m, h, r1, r2):
+    return 1./12. * m*(3*(r1**2+r2**2)+h**2)
+
+def tube_inertia_zz(m, h, r1, r2):
+    return 1./2. * m*(r1**2+r2**2)
