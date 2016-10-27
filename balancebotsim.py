@@ -24,8 +24,8 @@ cart_mass = c[5]
 wheel_mass = c[6]
 wheel_radius = c[7]
 wheel_base = c[8]
-wheel_contact_freq = c[9]
-wheel_contact_zeta = c[10]
+ground_contact_freq = c[9]
+ground_contact_zeta = c[10]
 
 # Define identifiers for generalized coordinates
 cart_quat = Matrix(q[0:4])
@@ -64,6 +64,12 @@ kde_list = []
 force_list = []
 body_list = []
 
+# Define contact model constants
+total_mass = pole_mass+cart_mass+wheel_mass*2
+ground_contact_m = total_mass/2
+ground_contact_k = ground_contact_m*(ground_contact_freq * 2.*pi)**2
+ground_contact_c = 2.*ground_contact_zeta*sqrt(ground_contact_k*ground_contact_m)
+
 # Define cart
 cart_frame = ReferenceFrame('cart_frame')
 cart_frame.orient(N, 'Quaternion', cart_quat)
@@ -85,6 +91,15 @@ pole_inertia = inertia(pole_frame, 1., 1., 1.)
 pole_masscenter = cart_masscenter.locatenew('pole_masscenter', -0.5*pole_length*pole_frame.z)
 pole_masscenter.v2pt_theory(cart_masscenter, N, pole_frame)
 pole_body = RigidBody('pole_body', pole_masscenter, pole_frame, pole_mass, (pole_inertia, pole_masscenter))
+pole_top_point = pole_masscenter.locatenew('pole_top_point', -0.5*pole_length*pole_frame.z)
+pole_top_point.v2pt_theory(pole_masscenter,N,pole_frame)
+pole_top_pos = pole_top_point.pos_from(O).to_matrix(N)
+pole_top_vel = pole_top_point.vel(N).to_matrix(N).subs(pole_theta_dot, pole_omega)
+pole_top_ground_normal_force = 0.
+pole_top_ground_normal_force = Piecewise(
+    (-ground_contact_k*pole_top_pos[2] + -ground_contact_c*pole_top_vel[2], pole_top_pos[2] >= 0.),
+    (0., True),
+    )
 
 # Define suspension constants
 pole_suspension_m = (pole_inertia+inertia_of_point_mass(pole_mass, pole_masscenter.pos_from(cart_masscenter), pole_frame)).dot(pole_frame.x).to_matrix(pole_frame)[0]
@@ -95,18 +110,13 @@ pole_suspension_c = 2.*pole_suspension_zeta*sqrt(pole_suspension_k*pole_suspensi
 force_list.append((pole_masscenter, pole_mass*gravity*N.z))
 force_list.append((pole_frame, (-pole_suspension_k*pole_theta + -pole_suspension_c*pole_omega)*pole_frame.x))
 force_list.append((cart_frame, -(-pole_suspension_k*pole_theta + -pole_suspension_c*pole_omega)*pole_frame.x))
+force_list.append((pole_top_point, N.z*pole_top_ground_normal_force))
 kde_list.append(pole_theta_dot-pole_omega)
 body_list.append(pole_body)
 
 # Define the ground direction vector
 # This is done by subtracting the component of the N.z vector along cart_frame.y from N.z, resulting in only the component in the cart_frame x-z plane, and normalizing
 ground_direction_vector = (N.z - N.z.dot(cart_frame.y)*cart_frame.y).normalize()
-
-# Define contact model constants
-total_mass = pole_mass+cart_mass+wheel_mass*2
-wheel_contact_m = total_mass
-wheel_contact_k = wheel_contact_m*(wheel_contact_freq * 2.*pi)**2
-wheel_contact_c = 2.*wheel_contact_zeta*sqrt(wheel_contact_k*wheel_contact_m)
 
 # Define lwheel
 lwheel_frame = ReferenceFrame('lwheel_frame')
@@ -119,14 +129,14 @@ lwheel_contact_point = lwheel_masscenter.locatenew('lwheel_contact_point', groun
 lwheel_contact_point.v2pt_theory(lwheel_masscenter,N,lwheel_frame)
 lwheel_contact_pos = lwheel_contact_point.pos_from(O).to_matrix(N)
 lwheel_contact_vel = lwheel_contact_point.vel(N).to_matrix(N)
-lwheel_normal_force = Piecewise(
-    (-wheel_contact_k*lwheel_contact_pos[2] + -wheel_contact_c*lwheel_contact_vel[2], lwheel_contact_pos[2] > 0),
+lwheel_ground_normal_force = Piecewise(
+    (-ground_contact_k*lwheel_contact_pos[2] + -ground_contact_c*lwheel_contact_vel[2], lwheel_contact_pos[2] >= 0.),
     (0., True),
     )
 
 # Add lwheel to eqns
 force_list.append((lwheel_masscenter, wheel_mass*gravity*N.z))
-force_list.append((lwheel_contact_point, N.z*lwheel_normal_force))
+force_list.append((lwheel_contact_point, N.z*lwheel_ground_normal_force))
 force_list.append((lwheel_frame, lwheel_motor_torque*lwheel_frame.y))
 force_list.append((cart_frame, -lwheel_motor_torque*lwheel_frame.y))
 kde_list.append(lwheel_theta_dot-lwheel_omega)
@@ -143,14 +153,14 @@ rwheel_contact_point = rwheel_masscenter.locatenew('rwheel_contact_point', groun
 rwheel_contact_point.v2pt_theory(rwheel_masscenter,N,rwheel_frame)
 rwheel_contact_pos = rwheel_contact_point.pos_from(O).to_matrix(N)
 rwheel_contact_vel = rwheel_contact_point.vel(N).to_matrix(N)
-rwheel_normal_force = Piecewise(
-    (-wheel_contact_k*rwheel_contact_pos[2] + -wheel_contact_c*rwheel_contact_vel[2], rwheel_contact_pos[2] > 0),
+rwheel_ground_normal_force = Piecewise(
+    (-ground_contact_k*rwheel_contact_pos[2] + -ground_contact_c*rwheel_contact_vel[2], rwheel_contact_pos[2] >= 0.),
     (0., True),
     )
 
 # Add rwheel to eqns
 force_list.append((rwheel_masscenter, wheel_mass*gravity*N.z))
-force_list.append((rwheel_contact_point, N.z*rwheel_normal_force))
+force_list.append((rwheel_contact_point, N.z*rwheel_ground_normal_force))
 force_list.append((rwheel_frame, rwheel_motor_torque*rwheel_frame.y))
 force_list.append((cart_frame, -rwheel_motor_torque*rwheel_frame.y))
 kde_list.append(rwheel_theta_dot-rwheel_omega)
@@ -161,9 +171,18 @@ KM.kanes_equations(force_list, body_list)
 
 s = System(KM, times=np.linspace(0,5,5000))
 
+r = 0.
+p = .1
+y = 0.
 s.initial_conditions = {
-        cart_quat[0]: 1.,
-        pole_theta: 0.
+        cart_quat[1]: sin(r/2)*cos(p/2)*cos(y/2) - cos(r/2)*sin(p/2)*sin(y/2),
+        cart_quat[2]: cos(r/2)*sin(p/2)*cos(y/2) + sin(r/2)*cos(p/2)*sin(y/2),
+        cart_quat[3]: cos(r/2)*cos(p/2)*sin(y/2) - sin(r/2)*sin(p/2)*cos(y/2),
+        cart_quat[0]: cos(r/2)*cos(p/2)*cos(y/2) + sin(r/2)*sin(p/2)*sin(y/2),
+
+        pole_theta: 0.02,
+        cart_pos[2]: -0.1,
+        lwheel_omega: 0.001
     }
 
 s.specifieds = {
@@ -187,8 +206,8 @@ s.constants = {
         wheel_mass: 0.1,
         wheel_radius: .1,
         wheel_base: .2,
-        wheel_contact_freq: 10.,
-        wheel_contact_zeta: 0.4
+        ground_contact_freq: 10.,
+        ground_contact_zeta: 0.6
     }
 
 s.generate_ode_function(generator='cython')
@@ -199,5 +218,8 @@ print(1)
 
 import matplotlib.pyplot as plt
 t = s.times
-plt.plot(t,[x[6] for x in result],t,[x[7] for x in result])
+plt.subplot(211)
+plt.plot(t,[quat_312_roll(x[0:4]) for x in result], t,[quat_312_pitch(x[0:4]) for x in result])
+plt.subplot(212)
+plt.plot(t,[x[6] for x in result])
 plt.show()

@@ -1,5 +1,5 @@
 from sympy import *
-
+import math
 def quatderiv(quat, omega):
     P = omega[0]
     Q = omega[1]
@@ -9,6 +9,20 @@ def quatderiv(quat, omega):
                    [ P,  0,  R, -Q],
                    [ Q, -R,  0,  P],
                    [ R,  Q, -P,  0]]) * Matrix(quat)
+
+def quat_312_roll(quat):
+    qr = quat[0]
+    qi = quat[1]
+    qj = quat[2]
+    qk = quat[3]
+    return math.atan2(2*(qr*qi+qj*qk), 1-2*(qi**2+qj**2))
+
+def quat_312_pitch(quat):
+    qr = quat[0]
+    qi = quat[1]
+    qj = quat[2]
+    qk = quat[3]
+    return math.asin(2*(qr*qj-qk*qi))
 
 def vector_in_frame(F, inlist):
     return F.x*inlist[0]+F.y*inlist[1]+F.z*inlist[2]
