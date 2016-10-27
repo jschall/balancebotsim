@@ -3,44 +3,45 @@ from sympy import *
 from sympy.physics.mechanics import *
 from pydy.system import System
 from pydy.codegen.ode_function_generators import LambdifyODEFunctionGenerator
+from scipy.integrate import odeint
 import numpy.linalg
 from datetime import datetime
 import numpy as np
 
 # Symbols
-const_sym = symbols('c0:23') # Constants
+p_sym = symbols('c0:23') # Constants
 q_sym = dynamicsymbols('q0:10')
 qd_sym = dynamicsymbols('q0:10',1)
 u_sym = dynamicsymbols('u0:9')
 in_sym = dynamicsymbols('in0:2')
 
 # Define identifiers for constants
-g = const_sym[0]
-pole_suspension_freq = const_sym[1]
-pole_suspension_zeta = const_sym[2]
-pole_length = const_sym[3]
-pole_mass = const_sym[4]
-cart_mass = const_sym[5]
-wheel_mass = const_sym[6]
-wheel_radius = const_sym[7]
-wheel_base = const_sym[8]
-ground_contact_freq = const_sym[9]
-ground_contact_zeta = const_sym[10]
-wheel_ground_friction_coeff = const_sym[11]
-contact_smoothing_dist = const_sym[12]
-friction_smoothing_vel = const_sym[13]
+g = p_sym[0]
+pole_suspension_freq = p_sym[1]
+pole_suspension_zeta = p_sym[2]
+pole_length = p_sym[3]
+pole_mass = p_sym[4]
+cart_mass = p_sym[5]
+wheel_mass = p_sym[6]
+wheel_radius = p_sym[7]
+wheel_base = p_sym[8]
+ground_contact_freq = p_sym[9]
+ground_contact_zeta = p_sym[10]
+wheel_ground_friction_coeff = p_sym[11]
+contact_smoothing_dist = p_sym[12]
+friction_smoothing_vel = p_sym[13]
 
-pole_inertia_xx = const_sym[14]
-pole_inertia_yy = const_sym[15]
-pole_inertia_zz = const_sym[16]
+pole_inertia_xx = p_sym[14]
+pole_inertia_yy = p_sym[15]
+pole_inertia_zz = p_sym[16]
 
-wheel_inertia_xx = const_sym[17]
-wheel_inertia_yy = const_sym[18]
-wheel_inertia_zz = const_sym[19]
+wheel_inertia_xx = p_sym[17]
+wheel_inertia_yy = p_sym[18]
+wheel_inertia_zz = p_sym[19]
 
-cart_inertia_xx = const_sym[20]
-cart_inertia_yy = const_sym[21]
-cart_inertia_zz = const_sym[22]
+cart_inertia_xx = p_sym[20]
+cart_inertia_yy = p_sym[21]
+cart_inertia_zz = p_sym[22]
 
 # Define identifiers for generalized coordinates
 cart_quat = q_sym[0:4]
@@ -209,54 +210,42 @@ constants.update({
         cart_inertia_zz: tube_inertia_xx_yy(cart_mass, wheel_base, wheel_radius*0.3, wheel_radius*0.9).xreplace(constants)
         })
 
-undefconsts = set(const_sym)-set(constants.keys())
+undefconsts = set(p_sym)-set(constants.keys())
 assert not undefconsts, 'undefined constants %s' % (undefconsts,)
 
 KM = KanesMethod(N, q_ind=q_sym, u_ind=u_sym, kd_eqs=kdes)
 KM.kanes_equations(forces, bodies)
 
 t_sim = 100
-s = System(KM, times=np.linspace(0,t_sim,t_sim*1000))
+bb_sys = System(KM, times=np.linspace(0,t_sim,t_sim*1000))
 
-s.constants=constants
+bb_sys.constants=constants
 
-r = 0.
-p = 0.
-y = 0.
-s.initial_conditions = {
-        cart_quat[1]: (sin(r/2)*cos(p/2)*cos(y/2) - cos(r/2)*sin(p/2)*sin(y/2)),
-        cart_quat[2]: (cos(r/2)*sin(p/2)*cos(y/2) + sin(r/2)*cos(p/2)*sin(y/2)),
-        cart_quat[3]: (cos(r/2)*cos(p/2)*sin(y/2) - sin(r/2)*sin(p/2)*cos(y/2)),
-        cart_quat[0]: (cos(r/2)*cos(p/2)*cos(y/2) + sin(r/2)*sin(p/2)*sin(y/2)),
-
-        pole_theta: 0.,
+bb_sys.initial_conditions = {
+        cart_quat[0]: 1.,
+        cart_quat[1]: 0.,
+        cart_quat[2]: 0.,
+        cart_quat[3]: 0.,
         cart_pos[2]: -wheel_radius.xreplace(constants),
+        cart_vel[0]: 0.,
+        cart_vel[1]: 0.,
+        cart_vel[2]: 0.,
+        pole_theta: 0.,
+        pole_omega: 0.,
         lwheel_omega: 0.,
         rwheel_omega: 0.,
     }
 
-s.specifieds = {
+bb_sys.specifieds = {
         lwheel_motor_torque: 0.,
         rwheel_motor_torque: 0.,
     }
 
-s.generate_ode_function(generator='cython')
+bb_sys.generate_ode_function(generator='cython')
 
-result = s.integrate()
+dyn = bb_sys.evaluate_ode_function
+x0 = bb_sys._initial_conditions_padded_with_defaults()
+x0 = [x0[k] for k in bb_sys.states]
 
-print("quat", list(result[-1][0:4]))
-print("pos", list(result[-1][4:7]))
-print("joints", list(result[-1][7:10]))
-print("omega", list(result[-1][10:13]))
-print("vel", list(result[-1][13:16]))
-print("djoints", list(result[-1][16:19]))
-
-import matplotlib.pyplot as plt
-t = s.times
-plt.subplot(311)
-plt.plot(t,[quat_312_roll(x[0:4]) for x in result], t,[quat_312_pitch(x[0:4]) for x in result])
-plt.subplot(312)
-plt.plot(t,[x[10+1] for x in result], t,[x[7] for x in result], )
-plt.subplot(313)
-plt.plot(t,[x[6] for x in result], t,[x[10+3] for x in result])
-plt.show()
+# Example integration
+#result = odeint(dyn,x0,bb_sys.times,(bb_sys._specifieds_padded_with_defaults(), bb_sys._constants_padded_with_defaults()))
