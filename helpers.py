@@ -1,20 +1,38 @@
 from sympy import *
 import math
-def quatderiv(quat, omega):
-    P = omega[0]
-    Q = omega[1]
-    R = omega[2]
 
-    return Matrix([[ 0, -P, -Q, -R],
-                   [ P,  0,  R, -Q],
-                   [ Q, -R,  0,  P],
-                   [ R,  Q, -P,  0]]) * Matrix(quat)
+def quat_multiply(q1, q2):
+    return Matrix([q1[0]*q2[0] - q1[1]*q2[1] - q1[2]*q2[2] - q1[3]*q2[3],
+                   q1[0]*q2[1] + q1[1]*q2[0] + q1[2]*q2[3] - q1[3]*q2[2],
+                   q1[0]*q2[2] - q1[1]*q2[3] + q1[2]*q2[0] + q1[3]*q2[1],
+                   q1[0]*q2[3] + q1[1]*q2[2] - q1[2]*q2[1] + q1[3]*q2[0]])
+
+def quatderiv(quat, omega):
+    return 0.5*quat_multiply(quat,Matrix([0,omega[0],omega[1],omega[2]]))
+
+def skew(v):
+    return Matrix([
+        [0, -v[2], v[1]],
+        [v[2], 0, -v[0]],
+        [-v[1], v[0], 0]
+    ])
+
+def quat_to_matrix(q):
+    q = Matrix(q)
+    return (q[0]**2-(q[1:,0].T*q[1:,0])[0])*eye(3) + 2.*(q[1:,0]*q[1:,0].T) + 2.*q[0]*skew(q[1:,0])
 
 def quat_312_roll(quat):
     qr = quat[0]
     qi = quat[1]
     qj = quat[2]
     qk = quat[3]
+
+    norm = sqrt(qr**2+qi**2+qj**2+qk**2)
+    qr /= norm
+    qi /= norm
+    qj /= norm
+    qk /= norm
+
     return math.atan2(2*(qr*qi+qj*qk), 1-2*(qi**2+qj**2))
 
 def quat_312_pitch(quat):
@@ -22,6 +40,13 @@ def quat_312_pitch(quat):
     qi = quat[1]
     qj = quat[2]
     qk = quat[3]
+
+    norm = sqrt(qr**2+qi**2+qj**2+qk**2)
+    qr /= norm
+    qi /= norm
+    qj /= norm
+    qk /= norm
+
     return math.asin(2*(qr*qj-qk*qi))
 
 def vector_in_frame(F, inlist):
