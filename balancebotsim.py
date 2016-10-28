@@ -261,30 +261,28 @@ get_rwheel_axis = lambdify([q_sym+u_sym], (.02*cart_frame.y).to_matrix(N).xrepla
 
 from time import sleep
 from visual import *
+from multiprocessing import Process, Queue
 
-t = 0.
-dt = 1./20.
-x = x0
+def vis_proc(q):
+    def vpy(v):
+        return vector(v[1], -v[2], -v[0])
 
-def vpy(v):
-    return vector(v[1], -v[2], -v[0])
+    theta = radians(30.)
+    scene.forward=vpy((cos(theta),0.,sin(theta)))
 
-theta = radians(30.)
-scene.forward=vpy((cos(theta),0.,sin(theta)))
+    floor = cylinder(pos=(0,0,0), axis=vpy((0.,0.,0.1)), material=materials.wood, radius=5.)
 
-floor = cylinder(pos=(0,0,0), axis=vpy((0.,0.,0.1)), material=materials.wood, radius=10.)
+    x = q.get()
 
-cart = cylinder(pos=vpy(get_cart_pos(x)), axis=vpy(get_cart_axis(x)), radius=0.9*wheel_radius.xreplace(constants))
-lwheel = cylinder(pos=vpy(get_lwheel_pos(x)), axis=vpy(get_lwheel_axis(x)), radius=wheel_radius.xreplace(constants))
-rwheel = cylinder(pos=vpy(get_rwheel_pos(x)), axis=vpy(get_rwheel_axis(x)), radius=wheel_radius.xreplace(constants))
-pole = cylinder(pos=vpy(get_pole_pos(x)), axis=vpy(get_pole_axis(x)), radius=0.03429/2)
+    cart = cylinder(pos=vpy(get_cart_pos(x)), axis=vpy(get_cart_axis(x)), radius=0.9*wheel_radius.xreplace(constants))
+    lwheel = cylinder(pos=vpy(get_lwheel_pos(x)), axis=vpy(get_lwheel_axis(x)), radius=wheel_radius.xreplace(constants))
+    rwheel = cylinder(pos=vpy(get_rwheel_pos(x)), axis=vpy(get_rwheel_axis(x)), radius=wheel_radius.xreplace(constants))
+    pole = cylinder(pos=vpy(get_pole_pos(x)), axis=vpy(get_pole_axis(x)), radius=0.03429/2)
 
+    while(True):
+        rate(60)
+        x = q.get()
 
-while(True):
-    rate(20)
-    times = np.linspace(t,t+dt,10)
-    if t > 5:
-        x = odeint(dyn,x,times,(bb_sys._specifieds_padded_with_defaults(), bb_sys._constants_padded_with_defaults()))[-1]
         cart.pos = vpy(get_cart_pos(x))
         cart.axis = vpy(get_cart_axis(x))
 
@@ -296,4 +294,18 @@ while(True):
 
         pole.pos = vpy(get_pole_pos(x))
         pole.axis = vpy(get_pole_axis(x))
-    t = times[-1]
+
+
+if __name__ == '__main__':
+    t = 0.
+    dt = 1./60.
+    x = x0
+
+    q = Queue()
+    p = Process(target=vis_proc, args=(q,))
+    p.start()
+    while(True):
+        times = np.linspace(t,t+dt,2)
+        x = odeint(dyn,x,times,(bb_sys._specifieds_padded_with_defaults(), bb_sys._constants_padded_with_defaults()))[-1]
+        t = times[-1]
+        q.put(x)
