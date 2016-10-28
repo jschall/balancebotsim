@@ -267,6 +267,8 @@ def vis_proc(q):
     def vpy(v):
         return vector(v[1], -v[2], -v[0])
 
+    scene = display(width=1024, height=1024)
+
     theta = radians(30.)
     scene.forward=vpy((cos(theta),0.,sin(theta)))
 
