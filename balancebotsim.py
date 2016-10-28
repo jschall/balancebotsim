@@ -205,9 +205,9 @@ constants.update({
         wheel_inertia_yy: tube_inertia_zz(wheel_mass, .02, wheel_radius*0.9, wheel_radius).xreplace(constants),
         wheel_inertia_zz: tube_inertia_xx_yy(wheel_mass, .02, wheel_radius*0.9, wheel_radius).xreplace(constants),
 
-        cart_inertia_xx: tube_inertia_xx_yy(cart_mass, wheel_base, wheel_radius*0.3, wheel_radius*0.9).xreplace(constants),
-        cart_inertia_yy: tube_inertia_zz(cart_mass, wheel_base, wheel_radius*0.3, wheel_radius*0.9).xreplace(constants),
-        cart_inertia_zz: tube_inertia_xx_yy(cart_mass, wheel_base, wheel_radius*0.3, wheel_radius*0.9).xreplace(constants)
+        cart_inertia_xx: tube_inertia_xx_yy(cart_mass, wheel_base-0.03, wheel_radius*0.3, wheel_radius*0.9).xreplace(constants),
+        cart_inertia_yy: tube_inertia_zz(cart_mass, wheel_base-0.03, wheel_radius*0.3, wheel_radius*0.9).xreplace(constants),
+        cart_inertia_zz: tube_inertia_xx_yy(cart_mass, wheel_base-0.03, wheel_radius*0.3, wheel_radius*0.9).xreplace(constants)
         })
 
 undefconsts = set(p_sym)-set(constants.keys())
@@ -247,5 +247,53 @@ dyn = bb_sys.evaluate_ode_function
 x0 = bb_sys._initial_conditions_padded_with_defaults()
 x0 = [x0[k] for k in bb_sys.states]
 
-# Example integration
-#result = odeint(dyn,x0,bb_sys.times,(bb_sys._specifieds_padded_with_defaults(), bb_sys._constants_padded_with_defaults()))
+get_cart_pos = lambdify([q_sym+u_sym], (cart_masscenter.pos_from(O)-0.5*(wheel_base-0.03)*cart_frame.y).to_matrix(N).xreplace(constants))
+get_cart_axis = lambdify([q_sym+u_sym], ((wheel_base-0.03)*cart_frame.y).to_matrix(N).xreplace(constants))
+
+get_pole_pos = lambdify([q_sym+u_sym], (pole_masscenter.pos_from(O)-0.5*pole_length*pole_frame.z).to_matrix(N).xreplace(constants))
+get_pole_axis = lambdify([q_sym+u_sym], (pole_length*pole_frame.z).to_matrix(N).xreplace(constants))
+
+get_lwheel_pos = lambdify([q_sym+u_sym], (lwheel_masscenter.pos_from(O)-0.5*.02*cart_frame.y).to_matrix(N).xreplace(constants))
+get_lwheel_axis = lambdify([q_sym+u_sym], (.02*cart_frame.y).to_matrix(N).xreplace(constants))
+
+get_rwheel_pos = lambdify([q_sym+u_sym], (rwheel_masscenter.pos_from(O)-0.5*.02*cart_frame.y).to_matrix(N).xreplace(constants))
+get_rwheel_axis = lambdify([q_sym+u_sym], (.02*cart_frame.y).to_matrix(N).xreplace(constants))
+
+from time import sleep
+from visual import *
+
+t = 0.
+dt = 1./20.
+x = x0
+
+def vpy(v):
+    return vector(v[1], -v[2], -v[0])
+
+theta = radians(30.)
+scene.forward=vpy((cos(theta),0.,sin(theta)))
+
+floor = cylinder(pos=(0,0,0), axis=vpy((0.,0.,0.1)), material=materials.wood, radius=10.)
+
+cart = cylinder(pos=vpy(get_cart_pos(x)), axis=vpy(get_cart_axis(x)), radius=0.9*wheel_radius.xreplace(constants))
+lwheel = cylinder(pos=vpy(get_lwheel_pos(x)), axis=vpy(get_lwheel_axis(x)), radius=wheel_radius.xreplace(constants))
+rwheel = cylinder(pos=vpy(get_rwheel_pos(x)), axis=vpy(get_rwheel_axis(x)), radius=wheel_radius.xreplace(constants))
+pole = cylinder(pos=vpy(get_pole_pos(x)), axis=vpy(get_pole_axis(x)), radius=0.03429/2)
+
+
+while(True):
+    rate(20)
+    times = np.linspace(t,t+dt,10)
+    if t > 5:
+        x = odeint(dyn,x,times,(bb_sys._specifieds_padded_with_defaults(), bb_sys._constants_padded_with_defaults()))[-1]
+        cart.pos = vpy(get_cart_pos(x))
+        cart.axis = vpy(get_cart_axis(x))
+
+        lwheel.pos = vpy(get_lwheel_pos(x))
+        lwheel.axis = vpy(get_lwheel_axis(x))
+
+        rwheel.pos = vpy(get_rwheel_pos(x))
+        rwheel.axis = vpy(get_rwheel_axis(x))
+
+        pole.pos = vpy(get_pole_pos(x))
+        pole.axis = vpy(get_pole_axis(x))
+    t = times[-1]
