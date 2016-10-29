@@ -277,19 +277,19 @@ def vis_proc(q):
     def vpy(v):
         return vector(v[1], -v[2], -v[0])
 
-    scene = display(width=1024, height=1024)
+    scene = display(width=1024, height=1024, background=color.black, ambient=color.white)
 
     theta = radians(30.)
     scene.forward=vpy((cos(theta),0.,sin(theta)))
 
-    floor = cylinder(pos=(0,0,0), axis=vpy((0.,0.,0.1)), material=materials.wood, radius=5.)
+    floor = cylinder(pos=(0,0,0), axis=vpy((0.,0.,0.1)), material=materials.wood, color=color.gray(.75), radius=3.)
 
     x = q.get()
 
-    cart = cylinder(pos=vpy(get_cart_pos(x)), axis=vpy(get_cart_axis(x)), radius=0.9*wheel_radius.xreplace(constants))
-    lwheel = cylinder(pos=vpy(get_lwheel_pos(x)), axis=vpy(get_lwheel_axis(x)), radius=wheel_radius.xreplace(constants))
-    rwheel = cylinder(pos=vpy(get_rwheel_pos(x)), axis=vpy(get_rwheel_axis(x)), radius=wheel_radius.xreplace(constants))
-    pole = cylinder(pos=vpy(get_pole_pos(x)), axis=vpy(get_pole_axis(x)), radius=0.03429/2)
+    cart = cylinder(pos=vpy(get_cart_pos(x)), axis=vpy(get_cart_axis(x)), radius=0.9*wheel_radius.xreplace(constants), material=materials.plastic, color=color.gray(0.25))
+    lwheel = cylinder(pos=vpy(get_lwheel_pos(x)), axis=vpy(get_lwheel_axis(x)), radius=wheel_radius.xreplace(constants), material=materials.plastic, color=color.gray(0.25))
+    rwheel = cylinder(pos=vpy(get_rwheel_pos(x)), axis=vpy(get_rwheel_axis(x)), radius=wheel_radius.xreplace(constants), material=materials.plastic, color=color.gray(0.25))
+    pole = cylinder(pos=vpy(get_pole_pos(x)), axis=vpy(get_pole_axis(x)), radius=0.03429/2, material=materials.plastic, color=color.gray(0.25))
 
     while(True):
         rate(60)
