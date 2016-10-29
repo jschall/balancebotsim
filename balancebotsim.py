@@ -263,9 +263,8 @@ get_lwheel_axis = lambdify([q_sym+u_sym], (.02*cart_frame.y).to_matrix(N).xrepla
 get_rwheel_pos = lambdify([q_sym+u_sym], (rwheel_masscenter.pos_from(O)-0.5*.02*cart_frame.y).to_matrix(N).xreplace(constants))
 get_rwheel_axis = lambdify([q_sym+u_sym], (.02*cart_frame.y).to_matrix(N).xreplace(constants))
 
-from time import sleep
-from visual import *
 from multiprocessing import Process, Queue
+from visual import *
 
 def vis_proc(q):
     def vpy(v):
@@ -303,15 +302,25 @@ def vis_proc(q):
 
 
 if __name__ == '__main__':
+    import signal
+    import sys
+
+    q = Queue(3)
+    p = Process(target=vis_proc, args=(q,))
     t = 0.
     dt = 1./60.
     x = x0
-
-    q = Queue()
-    p = Process(target=vis_proc, args=(q,))
+    q.put(x)
     p.start()
+
+    def signal_handler(signal, frame):
+        p.terminate()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
     while(True):
         times = np.linspace(t,t+dt,2)
-        x = odeint(dyn,x,times,(bb_sys._specifieds_padded_with_defaults(), bb_sys._constants_padded_with_defaults()))[-1]
+        x = odeint(dyn,x,times,(bb_sys._specifieds_padded_with_defaults(), bb_sys._constants_padded_with_defaults()), rtol=1e-5, atol=1e-11)[-1]
         t = times[-1]
         q.put(x)
