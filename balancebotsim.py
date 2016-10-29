@@ -34,11 +34,10 @@ cart_mass = new_p()
 wheel_mass = new_p()
 wheel_radius = new_p()
 wheel_base = new_p()
-#wheel_bearing_friction_coeff = new_p()
-#wheel_bearing_radius = new_p()
 ground_contact_freq = new_p()
 ground_contact_zeta = new_p()
-wheel_ground_friction_coeff = new_p()
+wheel_ground_mu_s = new_p()
+wheel_ground_mu_k = new_p()
 contact_smoothing_dist = new_p()
 friction_smoothing_vel = new_p()
 
@@ -149,7 +148,7 @@ lwheel_contact_pos = lwheel_contact_point.pos_from(O).to_matrix(N)
 lwheel_contact_vel = lwheel_contact_point.vel(N).to_matrix(N).subs(lwheel_theta_dot, lwheel_omega) # TODO: Why is this subs necessary?
 lwheel_contact_force = zeros(3,1)
 lwheel_contact_force[2] = (-ground_contact_k*lwheel_contact_pos[2] + -ground_contact_c*lwheel_contact_vel[2])*contact(lwheel_contact_pos[2], contact_smoothing_dist)
-lwheel_contact_force[0:2,0] = traction_force(wheel_ground_friction_coeff, lwheel_contact_vel[0:2,0], lwheel_contact_force[2], friction_smoothing_vel)
+lwheel_contact_force[0:2,0] = coulomb_friction_model(lwheel_contact_vel[0:2,0].norm(), wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(-lwheel_contact_vel[0:2,0])
 
 # Add lwheel to eqns
 forces.append((lwheel_masscenter, wheel_mass*gravity))
@@ -170,9 +169,9 @@ rwheel_contact_point = rwheel_masscenter.locatenew('rwheel_contact_point', groun
 rwheel_contact_point.v2pt_theory(rwheel_masscenter,N,rwheel_frame)
 rwheel_contact_pos = rwheel_contact_point.pos_from(O).to_matrix(N)
 rwheel_contact_vel = rwheel_contact_point.vel(N).to_matrix(N).subs(rwheel_theta_dot, rwheel_omega) # TODO: Why is this subs necessary?
-rwheel_contact_force = zeros(3)
+rwheel_contact_force = zeros(3,1)
 rwheel_contact_force[2] = (-ground_contact_k*rwheel_contact_pos[2] + -ground_contact_c*rwheel_contact_vel[2])*contact(rwheel_contact_pos[2], contact_smoothing_dist)
-rwheel_contact_force[0:2,0] = traction_force(wheel_ground_friction_coeff, rwheel_contact_vel[0:2,0], rwheel_contact_force[2], friction_smoothing_vel)
+rwheel_contact_force[0:2,0] = coulomb_friction_model(rwheel_contact_vel[0:2,0].norm(), wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(-rwheel_contact_vel[0:2,0])
 
 # Add rwheel to eqns
 forces.append((rwheel_masscenter, wheel_mass*gravity))
@@ -195,7 +194,8 @@ constants = {
         wheel_base: .2,
         ground_contact_freq: 15.,
         ground_contact_zeta: 0.25,
-        wheel_ground_friction_coeff: 0.5,
+        wheel_ground_mu_s: .8,
+        wheel_ground_mu_k: .6,
         contact_smoothing_dist: 5e-5,
         friction_smoothing_vel: 5e-5,
     }
@@ -234,8 +234,8 @@ bb_sys.initial_conditions = {
         cart_ang_vel[1]:0.,
         cart_ang_vel[2]:0.,
         cart_pos[2]: -wheel_radius.xreplace(constants)-1.,
-        cart_vel[0]: 3.,
-        cart_vel[1]: 0.,
+        cart_vel[0]: 0.,
+        cart_vel[1]: 1.5,
         cart_vel[2]: 0.,
         pole_theta: 0.,
         pole_omega: 0.,
