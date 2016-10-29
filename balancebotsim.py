@@ -9,64 +9,68 @@ from datetime import datetime
 import numpy as np
 
 # Symbols
-p_sym = symbols('c0:23') # Constants
-q_sym = dynamicsymbols('q0:10')
-qd_sym = dynamicsymbols('q0:10',1)
-u_sym = dynamicsymbols('u0:9')
-in_sym = dynamicsymbols('in0:2')
+p_sym = [] # Constants
+q_sym = [] # Generalized coordinates
+qd_sym = [] # Generalized coordinate derivatives
+u_sym = [] # Generalized speeds
+in_sym = [] # Inputs
+
+def new_p(n=1):
+    return new_sym('p', p_sym, n)
+def new_q(n=1):
+    return (new_sym('q', q_sym, n=n, dynlevel=0), new_sym('q', qd_sym, n=n, dynlevel=1))
+def new_u(n=1):
+    return new_sym('u', u_sym, n, dynlevel=0)
+def new_in(n=1):
+    return new_sym('in', in_sym, n, dynlevel=0)
 
 # Define identifiers for constants
-g = p_sym[0]
-pole_suspension_freq = p_sym[1]
-pole_suspension_zeta = p_sym[2]
-pole_length = p_sym[3]
-pole_mass = p_sym[4]
-cart_mass = p_sym[5]
-wheel_mass = p_sym[6]
-wheel_radius = p_sym[7]
-wheel_base = p_sym[8]
-ground_contact_freq = p_sym[9]
-ground_contact_zeta = p_sym[10]
-wheel_ground_friction_coeff = p_sym[11]
-contact_smoothing_dist = p_sym[12]
-friction_smoothing_vel = p_sym[13]
+g = new_p()
+pole_suspension_freq = new_p()
+pole_suspension_zeta = new_p()
+pole_length = new_p()
+pole_mass = new_p()
+cart_mass = new_p()
+wheel_mass = new_p()
+wheel_radius = new_p()
+wheel_base = new_p()
+#wheel_bearing_friction_coeff = new_p()
+#wheel_bearing_radius = new_p()
+ground_contact_freq = new_p()
+ground_contact_zeta = new_p()
+wheel_ground_friction_coeff = new_p()
+contact_smoothing_dist = new_p()
+friction_smoothing_vel = new_p()
 
-pole_inertia_xx = p_sym[14]
-pole_inertia_yy = p_sym[15]
-pole_inertia_zz = p_sym[16]
+pole_inertia_xx = new_p()
+pole_inertia_yy = new_p()
+pole_inertia_zz = new_p()
 
-wheel_inertia_xx = p_sym[17]
-wheel_inertia_yy = p_sym[18]
-wheel_inertia_zz = p_sym[19]
+wheel_inertia_xx = new_p()
+wheel_inertia_yy = new_p()
+wheel_inertia_zz = new_p()
 
-cart_inertia_xx = p_sym[20]
-cart_inertia_yy = p_sym[21]
-cart_inertia_zz = p_sym[22]
+cart_inertia_xx = new_p()
+cart_inertia_yy = new_p()
+cart_inertia_zz = new_p()
 
-# Define identifiers for generalized coordinates
-cart_quat = q_sym[0:4]
-cart_pos = q_sym[4:7]
-pole_theta = q_sym[7]
-lwheel_theta = q_sym[8]
-rwheel_theta = q_sym[9]
-
-# Define identifiers for generalized coordinate derivatives
-cart_quat_dot = qd_sym[0:4]
-cart_pos_dot = qd_sym[4:7]
-pole_theta_dot = qd_sym[7]
-lwheel_theta_dot = qd_sym[8]
-rwheel_theta_dot = qd_sym[9]
+# Define identifiers for generalized coordinates and derivatives
+cart_quat, cart_quat_dot = new_q(4)
+cart_pos, cart_pos_dot = new_q(3)
+pole_theta, pole_theta_dot = new_q()
+lwheel_theta, lwheel_theta_dot = new_q()
+rwheel_theta, rwheel_theta_dot = new_q()
 
 # Define identifiers for generalized speeds
-cart_ang_vel = u_sym[0:3]
-cart_vel = u_sym[3:6]
-pole_omega = u_sym[6]
-lwheel_omega = u_sym[7]
-rwheel_omega = u_sym[8]
+cart_ang_vel = new_u(3)
+cart_vel = new_u(3)
+pole_omega = new_u()
+lwheel_omega = new_u()
+rwheel_omega = new_u()
 
 # Define identifiers for force inputs
-lwheel_motor_torque = in_sym[0]
-rwheel_motor_torque = in_sym[1]
+lwheel_motor_torque = new_in()
+rwheel_motor_torque = new_in()
 
 # Define newtonian reference frame and origin, gravity
 N = ReferenceFrame('N')

@@ -1,5 +1,17 @@
 from sympy import *
+from sympy.physics.mechanics import *
 import math
+
+def new_sym(prefix, sym_list, n=1, dynlevel=None):
+    if isinstance(dynlevel,int):
+        sym_list.extend(dynamicsymbols('%s%u:%u' % (prefix, len(sym_list), len(sym_list)+n), dynlevel))
+    else:
+        sym_list.extend(symbols('%s%u:%u' % (prefix, len(sym_list), len(sym_list)+n)))
+
+    if n==1:
+        return sym_list[-1]
+    else:
+        return sym_list[-n:]
 
 def contact(dist, smoothing_dist):
     # "smoothed" step function
