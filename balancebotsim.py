@@ -147,7 +147,7 @@ lwheel_contact_point = lwheel_masscenter.locatenew('lwheel_contact_point', groun
 lwheel_contact_point.v2pt_theory(lwheel_masscenter,N,lwheel_frame)
 lwheel_contact_pos = lwheel_contact_point.pos_from(O).to_matrix(N)
 lwheel_contact_vel = lwheel_contact_point.vel(N).to_matrix(N).subs(lwheel_theta_dot, lwheel_omega) # TODO: Why is this subs necessary?
-lwheel_contact_force = zeros(3)
+lwheel_contact_force = zeros(3,1)
 lwheel_contact_force[2] = (-ground_contact_k*lwheel_contact_pos[2] + -ground_contact_c*lwheel_contact_vel[2])*contact(lwheel_contact_pos[2], contact_smoothing_dist)
 lwheel_contact_force[0:2,0] = traction_force(wheel_ground_friction_coeff, lwheel_contact_vel[0:2,0], lwheel_contact_force[2], friction_smoothing_vel)
 
@@ -193,11 +193,11 @@ constants = {
         wheel_mass: 0.1,
         wheel_radius: .1,
         wheel_base: .2,
-        ground_contact_freq: 10.,
+        ground_contact_freq: 15.,
         ground_contact_zeta: 0.25,
         wheel_ground_friction_coeff: 0.5,
-        contact_smoothing_dist: 1e-5,
-        friction_smoothing_vel: 1e-5,
+        contact_smoothing_dist: 5e-5,
+        friction_smoothing_vel: 5e-5,
     }
 
 constants.update({
@@ -230,8 +230,11 @@ bb_sys.initial_conditions = {
         cart_quat[1]: 0.,
         cart_quat[2]: 0.,
         cart_quat[3]: 0.,
-        cart_pos[2]: -wheel_radius.xreplace(constants),
-        cart_vel[0]: 0.,
+        cart_ang_vel[0]:0.,
+        cart_ang_vel[1]:0.,
+        cart_ang_vel[2]:0.,
+        cart_pos[2]: -wheel_radius.xreplace(constants)-1.,
+        cart_vel[0]: 3.,
         cart_vel[1]: 0.,
         cart_vel[2]: 0.,
         pole_theta: 0.,
@@ -262,6 +265,10 @@ get_lwheel_axis = lambdify([q_sym+u_sym], (.02*cart_frame.y).to_matrix(N).xrepla
 
 get_rwheel_pos = lambdify([q_sym+u_sym], (rwheel_masscenter.pos_from(O)-0.5*.02*cart_frame.y).to_matrix(N).xreplace(constants))
 get_rwheel_axis = lambdify([q_sym+u_sym], (.02*cart_frame.y).to_matrix(N).xreplace(constants))
+
+get_lwheel_contact_vel = lambdify([q_sym+u_sym], lwheel_contact_vel.xreplace(constants))
+get_rwheel_contact_vel = lambdify([q_sym+u_sym], rwheel_contact_vel.xreplace(constants))
+get_lwheel_contact_force = lambdify([q_sym+u_sym], lwheel_contact_force.xreplace(constants))
 
 from multiprocessing import Process, Queue
 from visual import *
@@ -321,6 +328,6 @@ if __name__ == '__main__':
 
     while(True):
         times = np.linspace(t,t+dt,2)
-        x = odeint(dyn,x,times,(bb_sys._specifieds_padded_with_defaults(), bb_sys._constants_padded_with_defaults()), rtol=1e-5, atol=1e-11)[-1]
+        x = odeint(dyn,x,times,(bb_sys._specifieds_padded_with_defaults(), bb_sys._constants_padded_with_defaults()), rtol=1e-4, atol=1e-6)[-1]
         t = times[-1]
         q.put(x)
