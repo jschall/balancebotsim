@@ -149,7 +149,7 @@ lwheel_contact_pos = lwheel_contact_point.pos_from(O).to_matrix(N)
 lwheel_contact_vel = lwheel_contact_point.vel(N).to_matrix(N).subs(lwheel_theta_dot, lwheel_omega) # TODO: Why is this subs necessary?
 lwheel_contact_force = zeros(3,1)
 lwheel_contact_force[2] = (-ground_contact_k*lwheel_contact_pos[2] + -ground_contact_c*lwheel_contact_vel[2])*contact(lwheel_contact_pos[2], contact_smoothing_dist)
-lwheel_contact_force[0:2,0] = coulomb_friction_model(lwheel_contact_vel[0:2,0].norm(), wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(-lwheel_contact_vel[0:2,0])*abs(lwheel_contact_force[2])
+lwheel_contact_force[0:2,0] = coulomb_friction_model(lwheel_contact_vel[0:2,0].norm(), -lwheel_contact_force[2], wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(lwheel_contact_vel[0:2,0])
 
 # Add lwheel to eqns
 forces.append((lwheel_masscenter, wheel_mass*gravity))
@@ -172,7 +172,7 @@ rwheel_contact_pos = rwheel_contact_point.pos_from(O).to_matrix(N)
 rwheel_contact_vel = rwheel_contact_point.vel(N).to_matrix(N).subs(rwheel_theta_dot, rwheel_omega) # TODO: Why is this subs necessary?
 rwheel_contact_force = zeros(3,1)
 rwheel_contact_force[2] = (-ground_contact_k*rwheel_contact_pos[2] + -ground_contact_c*rwheel_contact_vel[2])*contact(rwheel_contact_pos[2], contact_smoothing_dist)
-rwheel_contact_force[0:2,0] = coulomb_friction_model(rwheel_contact_vel[0:2,0].norm(), wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(-rwheel_contact_vel[0:2,0])*abs(rwheel_contact_force[2])
+rwheel_contact_force[0:2,0] = coulomb_friction_model(rwheel_contact_vel[0:2,0].norm(), -rwheel_contact_force[2], wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(rwheel_contact_vel[0:2,0])
 
 # Add rwheel to eqns
 forces.append((rwheel_masscenter, wheel_mass*gravity))

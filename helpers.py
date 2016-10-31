@@ -28,12 +28,12 @@ def slope_intercept(p1,p2):
     assert len(p1)==2 and len(p2)==2
     return ((p1[1] - p2[1])/(p1[0] - p2[0]), (p1[0]*p2[1] - p1[1]*p2[0])/(p1[0] - p2[0]))
 
-def coulomb_friction_model(v, static_coeff, kinetic_coeff, smoothing_vel):
+def coulomb_friction_model(v, normal_force, static_coeff, kinetic_coeff, smoothing_vel):
     v1, f1, v2, f2 = (smoothing_vel, static_coeff, 2*smoothing_vel, kinetic_coeff)
     m1, b1 = slope_intercept((0,0),(v1,f1))
     m2, b2 = slope_intercept((v1,f1),(v2,f2))
 
-    return Piecewise(
+    return Piecewise((0, normal_force<0), (normal_force, True))*-Piecewise(
         (       -f2,              v < -v2),
         (-(m2*v+b2), And(v >= -v2, v < -v1)),
         (   m1*v+b1, And(v >= -v1, v <  v1)),
