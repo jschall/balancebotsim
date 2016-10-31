@@ -1,0 +1,2 @@
+Wheel Iyy: .000804 kg m^2
+Wheel friction unloaded: .00324 Nm
