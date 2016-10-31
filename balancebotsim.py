@@ -44,13 +44,11 @@ wheel_ground_mu_k = new_p()
 contact_smoothing_dist = new_p()
 friction_smoothing_vel = new_p()
 
-pole_inertia_xx = new_p()
-pole_inertia_yy = new_p()
+pole_inertia_xx_yy = new_p()
 pole_inertia_zz = new_p()
 
-wheel_inertia_xx = new_p()
+wheel_inertia_xx_zz = new_p()
 wheel_inertia_yy = new_p()
-wheel_inertia_zz = new_p()
 
 cart_inertia_xx = new_p()
 cart_inertia_yy = new_p()
@@ -111,7 +109,7 @@ bodies.append(cart_body)
 # Define pole
 pole_frame = ReferenceFrame('pole_frame')
 pole_frame.orient(cart_frame, 'Axis', [pole_theta, cart_frame.x])
-pole_inertia = inertia(pole_frame, pole_inertia_xx, pole_inertia_yy, pole_inertia_zz)
+pole_inertia = inertia(pole_frame, pole_inertia_xx_yy, pole_inertia_xx_yy, pole_inertia_zz)
 pole_masscenter = cart_masscenter.locatenew('pole_masscenter', -0.5*pole_length*pole_frame.z)
 pole_masscenter.v2pt_theory(cart_masscenter, N, pole_frame)
 pole_body = RigidBody('pole_body', pole_masscenter, pole_frame, pole_mass, (pole_inertia, pole_masscenter))
@@ -141,7 +139,7 @@ ground_direction_vector = (N.z - N.z.dot(cart_frame.y)*cart_frame.y).normalize()
 # Define lwheel
 lwheel_frame = ReferenceFrame('lwheel_frame')
 lwheel_frame.orient(cart_frame, 'Axis', [lwheel_theta, cart_frame.y])
-lwheel_inertia = inertia(lwheel_frame, wheel_inertia_xx, wheel_inertia_yy, wheel_inertia_zz)
+lwheel_inertia = inertia(lwheel_frame, wheel_inertia_xx_zz, wheel_inertia_yy, wheel_inertia_xx_zz)
 lwheel_masscenter = cart_masscenter.locatenew('lwheel_masscenter', -0.5*wheel_base*cart_frame.y)
 lwheel_masscenter.v2pt_theory(cart_masscenter, N, lwheel_frame)
 lwheel_body = RigidBody('lwheel_body', lwheel_masscenter, lwheel_frame, wheel_mass, (lwheel_inertia, lwheel_masscenter))
@@ -151,7 +149,7 @@ lwheel_contact_pos = lwheel_contact_point.pos_from(O).to_matrix(N)
 lwheel_contact_vel = lwheel_contact_point.vel(N).to_matrix(N).subs(lwheel_theta_dot, lwheel_omega) # TODO: Why is this subs necessary?
 lwheel_contact_force = zeros(3,1)
 lwheel_contact_force[2] = (-ground_contact_k*lwheel_contact_pos[2] + -ground_contact_c*lwheel_contact_vel[2])*contact(lwheel_contact_pos[2], contact_smoothing_dist)
-lwheel_contact_force[0:2,0] = coulomb_friction_model(lwheel_contact_vel[0:2,0].norm(), wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(-lwheel_contact_vel[0:2,0])
+lwheel_contact_force[0:2,0] = coulomb_friction_model(lwheel_contact_vel[0:2,0].norm(), wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(-lwheel_contact_vel[0:2,0])*abs(lwheel_contact_force[2])
 
 # Add lwheel to eqns
 forces.append((lwheel_masscenter, wheel_mass*gravity))
@@ -164,7 +162,7 @@ bodies.append(lwheel_body)
 # Define rwheel
 rwheel_frame = ReferenceFrame('rwheel_frame')
 rwheel_frame.orient(cart_frame, 'Axis', [rwheel_theta, cart_frame.y])
-rwheel_inertia = inertia(rwheel_frame, wheel_inertia_xx, wheel_inertia_yy, wheel_inertia_zz)
+rwheel_inertia = inertia(rwheel_frame, wheel_inertia_xx_zz, wheel_inertia_yy, wheel_inertia_xx_zz)
 rwheel_masscenter = cart_masscenter.locatenew('rwheel_masscenter', 0.5*wheel_base*cart_frame.y)
 rwheel_masscenter.v2pt_theory(cart_masscenter, N, rwheel_frame)
 rwheel_body = RigidBody('rwheel_body', rwheel_masscenter, rwheel_frame, wheel_mass, (rwheel_inertia, rwheel_masscenter))
@@ -174,7 +172,7 @@ rwheel_contact_pos = rwheel_contact_point.pos_from(O).to_matrix(N)
 rwheel_contact_vel = rwheel_contact_point.vel(N).to_matrix(N).subs(rwheel_theta_dot, rwheel_omega) # TODO: Why is this subs necessary?
 rwheel_contact_force = zeros(3,1)
 rwheel_contact_force[2] = (-ground_contact_k*rwheel_contact_pos[2] + -ground_contact_c*rwheel_contact_vel[2])*contact(rwheel_contact_pos[2], contact_smoothing_dist)
-rwheel_contact_force[0:2,0] = coulomb_friction_model(rwheel_contact_vel[0:2,0].norm(), wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(-rwheel_contact_vel[0:2,0])
+rwheel_contact_force[0:2,0] = coulomb_friction_model(rwheel_contact_vel[0:2,0].norm(), wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(-rwheel_contact_vel[0:2,0])*abs(rwheel_contact_force[2])
 
 # Add rwheel to eqns
 forces.append((rwheel_masscenter, wheel_mass*gravity))
@@ -191,8 +189,8 @@ constants = {
         pole_suspension_zeta: 0.5,
         pole_length: 1.83,
         pole_mass: 0.39,
-        cart_mass: 1.0,
-        wheel_mass: 0.1,
+        cart_mass: 0.6,
+        wheel_mass: 0.2,
         wheel_radius: .092,
         wheel_base: .2,
         ground_contact_freq: 15.,
@@ -203,18 +201,21 @@ constants = {
         friction_smoothing_vel: 5e-5,
     }
 
+pole_radius = 0.017145
+pole_wall_thickness = 0.00254
+cart_radius = .08
+cart_width = wheel_base-0.03
+
 constants.update({
-        pole_inertia_xx: tube_inertia_xx_yy(pole_mass, pole_length, 0.03175/2, 0.03429/2).xreplace(constants),
-        pole_inertia_yy: tube_inertia_xx_yy(pole_mass, pole_length, 0.03175/2, 0.03429/2).xreplace(constants),
-        pole_inertia_zz: tube_inertia_zz(pole_mass, pole_length, 0.03175/2, 0.03429/2).xreplace(constants),
+        pole_inertia_xx_yy: tube_inertia_xx_yy(pole_mass, pole_length, pole_radius-pole_wall_thickness, pole_radius).xreplace(constants),
+        pole_inertia_zz: tube_inertia_zz(pole_mass, pole_length, pole_radius-pole_wall_thickness, pole_radius).xreplace(constants),
 
-        wheel_inertia_xx: tube_inertia_xx_yy(wheel_mass, .02, wheel_radius*0.9, wheel_radius).xreplace(constants),
-        wheel_inertia_yy: tube_inertia_zz(wheel_mass, .02, wheel_radius*0.9, wheel_radius).xreplace(constants),
-        wheel_inertia_zz: tube_inertia_xx_yy(wheel_mass, .02, wheel_radius*0.9, wheel_radius).xreplace(constants),
+        wheel_inertia_xx_zz: 0.000804/2,
+        wheel_inertia_yy: 0.000804,
 
-        cart_inertia_xx: tube_inertia_xx_yy(cart_mass, wheel_base-0.03, wheel_radius*0.3, wheel_radius*0.9).xreplace(constants),
-        cart_inertia_yy: tube_inertia_zz(cart_mass, wheel_base-0.03, wheel_radius*0.3, wheel_radius*0.9).xreplace(constants),
-        cart_inertia_zz: tube_inertia_xx_yy(cart_mass, wheel_base-0.03, wheel_radius*0.3, wheel_radius*0.9).xreplace(constants)
+        cart_inertia_xx: tube_inertia_xx_yy(cart_mass, cart_width, 0, cart_radius).xreplace(constants),
+        cart_inertia_yy: tube_inertia_zz(cart_mass, cart_width, 0, cart_radius).xreplace(constants),
+        cart_inertia_zz: tube_inertia_xx_yy(cart_mass, cart_width, 0, cart_radius).xreplace(constants)
         })
 
 undefconsts = set(p_sym)-set(constants.keys())
@@ -300,7 +301,7 @@ def vis_proc(q):
 
     x = q.get()
 
-    scene.center = vpy(get_pole_pos(x)+get_pole_axis(x)*0.5)
+    scene.center = vpy(get_pole_pos(x)+get_pole_axis(x)*0.75)
     cart = cylinder(pos=vpy(get_cart_pos(x)), axis=vpy(get_cart_axis(x)), up=vpy(get_cart_up(x)), radius=0.9*wheel_radius.xreplace(constants), material=materials.wood, color=color.gray(0.15))
     lwheel = cylinder(pos=vpy(get_lwheel_pos(x)), axis=vpy(get_lwheel_axis(x)), up=vpy(get_lwheel_up(x)), radius=wheel_radius.xreplace(constants), material=materials.wood, color=color.gray(0.15))
     rwheel = cylinder(pos=vpy(get_rwheel_pos(x)), axis=vpy(get_rwheel_axis(x)), up=vpy(get_lwheel_up(x)), radius=wheel_radius.xreplace(constants), material=materials.wood, color=color.gray(0.15))
@@ -327,7 +328,7 @@ def vis_proc(q):
         pole.axis = vpy(get_pole_axis(x))
         pole.up=vpy(get_pole_up(x))
 
-        scene.center = vpy(get_pole_pos(x)+get_pole_axis(x)*0.5)
+        scene.center = vpy(get_pole_pos(x)+get_pole_axis(x)*0.75)
 
 
 if __name__ == '__main__':
