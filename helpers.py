@@ -91,27 +91,32 @@ def quat_312_pitch(quat):
 def vector_in_frame(F, inlist):
     return F.x*inlist[0]+F.y*inlist[1]+F.z*inlist[2]
 
-def count_subexpression(subexpr, expr):
-    if hasattr(expr, "__getitem__"):
-        return sum(map(lambda x: count_subexpression(subexpr, x), expr))
+def count_expression(count_expr, within_expr):
+    if hasattr(within_expr, "__getitem__"):
+        return sum(map(lambda x: count_expression(count_expr, x), within_expr))
     else:
-        return expr.count(subexpr)
+        return within_expr.count(count_expr)
 
-def extractSubexpressions(inexprs, prefix='X', threshold=0, prev_subx=[]):
-    subexprs, outexprs = cse(inexprs, symbols=numbered_symbols('__TMP__'), order='none')
+def extractSubexpressions(inexprs, prefix='X', threshold=1, prev_subx=[]):
+    # Perform common subexpression extraction on inexprs and existing subexpressions
+    subexprs, outexprs = cse(inexprs+[x[1] for x in prev_subx], symbols=numbered_symbols('__TMP__'), order='none')
 
-    subexprs = prev_subx+subexprs
+    subexprs = list(zip([x[0] for x in prev_subx], outexprs[len(inexprs):]))+subexprs
+    outexprs = outexprs[:len(inexprs)]
 
-    for i in reversed(range(len(subexprs))):
-        from sympy.logic.boolalg import Boolean
-        if threshold == 0:
-            ops_saved = 1
-        else:
-            ops_saved = (count_subexpression(subexprs[i][0], [[x[1] for x in subexprs], outexprs])-1)*subexprs[i][1].count_ops()
-        if ops_saved < threshold or isinstance(subexprs[i][1], Boolean):
-            sub = dict([subexprs.pop(i)])
-            subexprs = [(x[0],x[1].xreplace(sub)) for x in subexprs]
-            outexprs = [x.xreplace(sub) for x in outexprs]
+    done = False
+    while not done:
+        done = True
+
+        for i in reversed(range(len(subexprs))):
+            from sympy.logic.boolalg import Boolean
+            ops_saved = (count_expression(subexprs[i][0], [[x[1] for x in subexprs], outexprs])-1)*subexprs[i][1].count_ops()
+            if ops_saved < threshold or isinstance(subexprs[i][1], Boolean):
+                sub = dict([subexprs.pop(i)])
+                subexprs = [(x[0],x[1].xreplace(sub)) for x in subexprs]
+                outexprs = [x.xreplace(sub) for x in outexprs]
+                done = False
+                break
 
     for i in range(len(subexprs)):
         newSym = Symbol('%s[%u]' % (prefix,i+len(prev_subx)))
