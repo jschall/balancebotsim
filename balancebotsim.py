@@ -84,8 +84,22 @@ pole_top_pos = pole_top_point.pos_from(O).to_matrix(N)
 pole_top_vel = pole_top_point.vel(N).to_matrix(N).subs(pole_theta_dot, pole_omega) # TODO: Why is this subs necessary?
 pole_top_ground_normal_force = (-ground_contact_k*pole_top_pos[2] + -ground_contact_c*pole_top_vel[2])*contact(pole_top_pos[2], contact_smoothing_dist)
 
+# Define battery
+battery_frame = pole_frame
+battery_inertia = inertia(battery_frame, battery_inertia_xx_yy, battery_inertia_xx_yy, battery_inertia_zz)
+battery_masscenter = cart_masscenter.locatenew('battery_masscenter', -0.5*battery_length*battery_frame.z)
+battery_masscenter.v2pt_theory(cart_masscenter,N,battery_frame)
+battery_body = RigidBody('battery', battery_masscenter, battery_frame, battery_mass, (battery_inertia, battery_masscenter))
+
+# Define payload
+payload_frame = pole_frame
+payload_inertia = inertia(payload_frame, payload_inertia_xx, payload_inertia_yy, payload_inertia_zz)
+payload_masscenter = cart_masscenter.locatenew('payload_masscenter', -payload_position_h*payload_frame.z + payload_position_x*payload_frame.x)
+payload_masscenter.v2pt_theory(cart_masscenter,N,battery_frame)
+payload_body = RigidBody('payload', payload_masscenter, payload_frame, payload_mass, (payload_inertia, payload_masscenter))
+
 # Define suspension constants
-pole_suspension_m = (pole_inertia+inertia_of_point_mass(pole_mass, pole_masscenter.pos_from(cart_masscenter), pole_frame)).dot(pole_frame.x).to_matrix(pole_frame)[0]
+pole_suspension_m = (pole_inertia+battery_inertia+payload_inertia+inertia_of_point_mass(pole_mass, pole_masscenter.pos_from(cart_masscenter), pole_frame)+inertia_of_point_mass(battery_mass, battery_masscenter.pos_from(cart_masscenter), battery_frame)+inertia_of_point_mass(payload_mass, payload_masscenter.pos_from(cart_masscenter), payload_frame)).dot(pole_frame.x).to_matrix(pole_frame)[0]
 pole_suspension_k = pole_suspension_m*(pole_suspension_freq * 2.*pi)**2
 pole_suspension_c = 2.*pole_suspension_zeta*sqrt(pole_suspension_k*pole_suspension_m)
 
@@ -97,9 +111,18 @@ forces.append((pole_top_point, N.z*pole_top_ground_normal_force))
 kdes.append(pole_theta_dot-pole_omega)
 bodies.append(pole_body)
 
-# Define the ground direction vector
+# Add battery to eqns
+forces.append((battery_masscenter, battery_mass*gravity))
+bodies.append(battery_body)
+
+# Add payload to eqns
+forces.append((payload_masscenter, payload_mass*gravity))
+bodies.append(payload_body)
+
+# Define the ground direction vector and a wall direction vector
 # This is done by subtracting the component of the N.z vector along cart_frame.y from N.z, resulting in only the component in the cart_frame x-z plane, and normalizing
 ground_direction_vector = (N.z - N.z.dot(cart_frame.y)*cart_frame.y).normalize()
+wall_direction_vector = (N.x - N.x.dot(cart_frame.y)*cart_frame.y).normalize()
 
 # Define lwheel
 lwheel_frame = ReferenceFrame('lwheel_frame')
@@ -108,17 +131,28 @@ lwheel_inertia = inertia(lwheel_frame, wheel_inertia_xx_zz, wheel_inertia_yy, wh
 lwheel_masscenter = cart_masscenter.locatenew('lwheel_masscenter', -0.5*wheel_base*cart_frame.y)
 lwheel_masscenter.v2pt_theory(cart_masscenter, N, lwheel_frame)
 lwheel_body = RigidBody('lwheel', lwheel_masscenter, lwheel_frame, wheel_mass, (lwheel_inertia, lwheel_masscenter))
-lwheel_contact_point = lwheel_masscenter.locatenew('lwheel_contact_point', ground_direction_vector*wheel_radius)
-lwheel_contact_point.v2pt_theory(lwheel_masscenter,N,lwheel_frame)
-lwheel_contact_pos = lwheel_contact_point.pos_from(O).to_matrix(N)
-lwheel_contact_vel = lwheel_contact_point.vel(N).to_matrix(N).subs(lwheel_theta_dot, lwheel_omega) # TODO: Why is this subs necessary?
-lwheel_contact_force = zeros(3,1)
-lwheel_contact_force[2] = (-ground_contact_k*lwheel_contact_pos[2] + -ground_contact_c*lwheel_contact_vel[2])*contact(lwheel_contact_pos[2], contact_smoothing_dist)
-lwheel_contact_force[0:2,0] = coulomb_friction_model(lwheel_contact_vel[0:2,0].norm(), -lwheel_contact_force[2], wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(lwheel_contact_vel[0:2,0])
+
+# Set up lwheel contact model
+lwheel_ground_contact_point = lwheel_masscenter.locatenew('lwheel_ground_contact_point', ground_direction_vector*wheel_radius)
+lwheel_ground_contact_point.v2pt_theory(lwheel_masscenter,N,lwheel_frame)
+lwheel_ground_contact_pos = lwheel_ground_contact_point.pos_from(O).to_matrix(N)
+lwheel_ground_contact_vel = lwheel_ground_contact_point.vel(N).to_matrix(N).subs(lwheel_theta_dot, lwheel_omega) # TODO: Why is this subs necessary?
+lwheel_ground_contact_force = zeros(3,1)
+lwheel_ground_contact_force[2] = (-ground_contact_k*lwheel_ground_contact_pos[2] + -ground_contact_c*lwheel_ground_contact_vel[2])*contact(lwheel_ground_contact_pos[2], contact_smoothing_dist)
+lwheel_ground_contact_force[0:2,0] = coulomb_friction_model(lwheel_ground_contact_vel[0:2,0].norm(), -lwheel_ground_contact_force[2], wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(lwheel_ground_contact_vel[0:2,0])
+
+lwheel_wall_contact_point = lwheel_masscenter.locatenew('lwheel_wall_contact_point', wall_direction_vector*wheel_radius)
+lwheel_wall_contact_point.v2pt_theory(lwheel_masscenter,N,lwheel_frame)
+lwheel_wall_contact_pos = lwheel_wall_contact_point.pos_from(O).to_matrix(N)
+lwheel_wall_contact_vel = lwheel_wall_contact_point.vel(N).to_matrix(N).subs(lwheel_theta_dot, lwheel_omega) # TODO: Why is this subs necessary?
+lwheel_wall_contact_force = zeros(3,1)
+lwheel_wall_contact_force[0] = (-ground_contact_k*lwheel_wall_contact_pos[0] + -ground_contact_c*lwheel_wall_contact_vel[0])*contact(lwheel_wall_contact_pos[0], contact_smoothing_dist)
+lwheel_wall_contact_force[1:3,0] = coulomb_friction_model(lwheel_wall_contact_vel[1:3,0].norm(), -lwheel_wall_contact_force[0], wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(lwheel_wall_contact_vel[1:3,0])
 
 # Add lwheel to eqns
 forces.append((lwheel_masscenter, wheel_mass*gravity))
-forces.append((lwheel_contact_point, vector_in_frame(N, lwheel_contact_force)))
+forces.append((lwheel_ground_contact_point, vector_in_frame(N, lwheel_ground_contact_force)))
+forces.append((lwheel_wall_contact_point, vector_in_frame(N, lwheel_wall_contact_force)))
 forces.append((lwheel_frame, left_motor_torque*lwheel_frame.y))
 forces.append((cart_frame, -left_motor_torque*lwheel_frame.y))
 kdes.append(lwheel_theta_dot-lwheel_omega)
@@ -131,187 +165,225 @@ rwheel_inertia = inertia(rwheel_frame, wheel_inertia_xx_zz, wheel_inertia_yy, wh
 rwheel_masscenter = cart_masscenter.locatenew('rwheel_masscenter', 0.5*wheel_base*cart_frame.y)
 rwheel_masscenter.v2pt_theory(cart_masscenter, N, rwheel_frame)
 rwheel_body = RigidBody('rwheel', rwheel_masscenter, rwheel_frame, wheel_mass, (rwheel_inertia, rwheel_masscenter))
-rwheel_contact_point = rwheel_masscenter.locatenew('rwheel_contact_point', ground_direction_vector*wheel_radius)
-rwheel_contact_point.v2pt_theory(rwheel_masscenter,N,rwheel_frame)
-rwheel_contact_pos = rwheel_contact_point.pos_from(O).to_matrix(N)
-rwheel_contact_vel = rwheel_contact_point.vel(N).to_matrix(N).subs(rwheel_theta_dot, rwheel_omega) # TODO: Why is this subs necessary?
-rwheel_contact_force = zeros(3,1)
-rwheel_contact_force[2] = (-ground_contact_k*rwheel_contact_pos[2] + -ground_contact_c*rwheel_contact_vel[2])*contact(rwheel_contact_pos[2], contact_smoothing_dist)
-rwheel_contact_force[0:2,0] = coulomb_friction_model(rwheel_contact_vel[0:2,0].norm(), -rwheel_contact_force[2], wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(rwheel_contact_vel[0:2,0])
+
+# Set up rwheel contact model
+rwheel_ground_contact_point = rwheel_masscenter.locatenew('rwheel_ground_contact_point', ground_direction_vector*wheel_radius)
+rwheel_ground_contact_point.v2pt_theory(rwheel_masscenter,N,rwheel_frame)
+rwheel_ground_contact_pos = rwheel_ground_contact_point.pos_from(O).to_matrix(N)
+rwheel_ground_contact_vel = rwheel_ground_contact_point.vel(N).to_matrix(N).subs(rwheel_theta_dot, rwheel_omega) # TODO: Why is this subs necessary?
+rwheel_ground_contact_force = zeros(3,1)
+rwheel_ground_contact_force[2] = (-ground_contact_k*rwheel_ground_contact_pos[2] + -ground_contact_c*rwheel_ground_contact_vel[2])*contact(rwheel_ground_contact_pos[2], contact_smoothing_dist)
+rwheel_ground_contact_force[0:2,0] = coulomb_friction_model(rwheel_ground_contact_vel[0:2,0].norm(), -rwheel_ground_contact_force[2], wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(rwheel_ground_contact_vel[0:2,0])
+
+rwheel_wall_contact_point = rwheel_masscenter.locatenew('rwheel_wall_contact_point', wall_direction_vector*wheel_radius)
+rwheel_wall_contact_point.v2pt_theory(rwheel_masscenter,N,rwheel_frame)
+rwheel_wall_contact_pos = rwheel_wall_contact_point.pos_from(O).to_matrix(N)
+rwheel_wall_contact_vel = rwheel_wall_contact_point.vel(N).to_matrix(N).subs(rwheel_theta_dot, rwheel_omega) # TODO: Why is this subs necessary?
+rwheel_wall_contact_force = zeros(3,1)
+rwheel_wall_contact_force[0] = (-ground_contact_k*rwheel_wall_contact_pos[0] + -ground_contact_c*rwheel_wall_contact_vel[0])*contact(rwheel_wall_contact_pos[0], contact_smoothing_dist)
+rwheel_wall_contact_force[1:3,0] = coulomb_friction_model(rwheel_wall_contact_vel[1:3,0].norm(), -rwheel_wall_contact_force[0], wheel_ground_mu_s, wheel_ground_mu_k, friction_smoothing_vel)*safe_normalize(rwheel_wall_contact_vel[1:3,0])
 
 # Add rwheel to eqns
 forces.append((rwheel_masscenter, wheel_mass*gravity))
-forces.append((rwheel_contact_point, vector_in_frame(N, rwheel_contact_force)))
+forces.append((rwheel_ground_contact_point, vector_in_frame(N, rwheel_ground_contact_force)))
+forces.append((rwheel_wall_contact_point, vector_in_frame(N, rwheel_wall_contact_force)))
 forces.append((rwheel_frame, right_motor_torque*rwheel_frame.y))
 forces.append((cart_frame, -right_motor_torque*rwheel_frame.y))
 kdes.append(rwheel_theta_dot-rwheel_omega)
 bodies.append(rwheel_body)
 
-output = {'bodies':{}}
-
-for b in bodies:
-    output['bodies'][str(b)] = {}
-    output['bodies'][str(b)]['masscenter_pos'] = b.masscenter.pos_from(O).to_matrix(N)
-    output['bodies'][str(b)]['masscenter_vel'] = b.masscenter.vel(N).to_matrix(N)
-    output['bodies'][str(b)]['dcm'] = b.masscenter.pos_from(O).to_matrix(N)
-
-print(output)
-
 KM = KanesMethod(N, q_ind=q_sym, u_ind=u_sym, kd_eqs=kdes)
 KM.kanes_equations(forces, bodies)
 
-kdd = KM.kindiffdict()
-mm = KM.mass_matrix_full
-fo = KM.forcing_full
+#kdd = KM.kindiffdict()
+#mm = KM.mass_matrix_full
+#fo = KM.forcing_full
 
-mm, fo, subx = extractSubexpressions([mm, fo], 'subx')
+#mm, fo, subx = extractSubexpressions([mm, fo], 'subx')
 
-eom = mm.LUsolve(fo)
-eom, subx = extractSubexpressions([eom], 'subx', prev_subx=subx)
+#eom = mm.LUsolve(fo)
+#eom, subx = extractSubexpressions([eom], 'subx', prev_subx=subx)
 
-output = {'subx':subx, 'eom':list(zip(q_sym+u_sym, eom)), 'bodies':{}}
-for b in bodies:
-    output[bodies][str(b)]['masscenter_pos'] = b.masscenter.pos_from(O).to_matrix(N)
-    output[bodies][str(b)]['masscenter_vel'] = b.masscenter.vel(N).to_matrix(N)
-    output[bodies][str(b)]['dcm'] = b.masscenter.pos_from(O).to_matrix(N)
+#output = {'eom': {'subx': subx, 'param': Matrix(q_sym+u_sym+in_sym), 'ret': eom}}
+#for b in bodies:
+    #output[str(b)+'_masscenter_pos'] = {'param': Matrix(q_sym+u_sym), 'ret': simplify(b.masscenter.pos_from(O).to_matrix(N))}
+    #output[str(b)+'_masscenter_vel'] = {'param': Matrix(q_sym+u_sym), 'ret': simplify(b.masscenter.vel(N).to_matrix(N))}
+    #output[str(b)+'_rot_body_to_newtonian'] = {'param': Matrix(q_sym+u_sym), 'ret': simplify(N.dcm(b.frame))}
 
-with open('dyn.srepr', 'w') as f:
-    f.truncate()
-    f.write(srepr(output))
+#with open('dyn.srepr', 'w') as f:
+    #f.truncate()
+    #f.write(srepr(output))
 
-#bb_sys = System(KM)
+#pprint(q_sym+u_sym)
 
-#bb_sys.initial_conditions = {
-        #cart_quat[0]: 1.,
-        #cart_quat[1]: 0.,
-        #cart_quat[2]: 0.,
-        #cart_quat[3]: 0.,
-        #cart_ang_vel[0]:0.,
-        #cart_ang_vel[1]:0.,
-        #cart_ang_vel[2]:0.,
-        #cart_pos[2]: -wheel_radius-1.,
-        #cart_vel[0]: 0.,
-        #cart_vel[1]: 0.,
-        #cart_vel[2]: 0.,
-        #pole_theta: 0.,
-        #pole_omega: 0.,
-        #lwheel_omega: 50,
-        #rwheel_omega: 50.,
-    #}
+Vlim = 33.6
+Km = .308
+R = 10.
+kP = 200.
+kD = 2.
 
-#bb_sys.specifieds = {
-        #left_motor_torque: 0.,
-        #right_motor_torque: 0.,
-    #}
+def t_l(x,t):
+    Vemf = Km*x[17]
+    pos_torque_limit = Km*(Vlim-Vemf)/R
+    neg_torque_limit = Km*(-Vlim-Vemf)/R
 
-#bb_sys.generate_ode_function(generator='cython')
+    pitch_angle = quat_321_pitch(x[0:4])
+    pitch_rate = x[11]
 
-#dyn = bb_sys.evaluate_ode_function
-#x0 = bb_sys._initial_conditions_padded_with_defaults()
-#x0 = [x0[k] for k in bb_sys.states]
+    ret = min(max(pitch_angle*kP+pitch_rate*kD, neg_torque_limit), pos_torque_limit)
+    return ret
 
-#get_cart_pos = lambdify([q_sym+u_sym], (cart_masscenter.pos_from(O)-0.5*(wheel_base-0.03)*cart_frame.y).to_matrix(N))
-#get_cart_axis = lambdify([q_sym+u_sym], ((wheel_base-0.03)*cart_frame.y).to_matrix(N))
-#get_cart_up = lambdify([q_sym+u_sym], cart_frame.z.to_matrix(N))
+def t_r(x,t):
+    Vemf = Km*x[18]
+    pos_torque_limit = Km*(Vlim-Vemf)/R
+    neg_torque_limit = Km*(-Vlim-Vemf)/R
 
-#get_pole_pos = lambdify([q_sym+u_sym], (pole_masscenter.pos_from(O)-0.5*pole_length*pole_frame.z).to_matrix(N))
-#get_pole_axis = lambdify([q_sym+u_sym], (pole_length*pole_frame.z).to_matrix(N))
-#get_pole_up = lambdify([q_sym+u_sym], pole_frame.x.to_matrix(N))
+    pitch_angle = quat_321_pitch(x[0:4])
+    pitch_rate = x[11]
 
-#get_lwheel_pos = lambdify([q_sym+u_sym], (lwheel_masscenter.pos_from(O)-0.5*.02*cart_frame.y).to_matrix(N))
-#get_lwheel_axis = lambdify([q_sym+u_sym], (.02*cart_frame.y).to_matrix(N))
-#get_lwheel_up = lambdify([q_sym+u_sym], lwheel_frame.z.to_matrix(N))
+    ret = min(max(pitch_angle*kP+pitch_rate*kD, neg_torque_limit), pos_torque_limit)
+    return ret
 
+bb_sys = System(KM)
 
-#get_rwheel_pos = lambdify([q_sym+u_sym], (rwheel_masscenter.pos_from(O)-0.5*.02*cart_frame.y).to_matrix(N))
-#get_rwheel_axis = lambdify([q_sym+u_sym], (.02*cart_frame.y).to_matrix(N))
-#get_rwheel_up = lambdify([q_sym+u_sym], rwheel_frame.z.to_matrix(N))
+forward_vel = 0.
+bb_sys.initial_conditions = {
+        cart_quat[0]: 1.,
+        cart_quat[1]: 0.,
+        cart_quat[2]: 0.,
+        cart_quat[3]: 0.,
+        cart_ang_vel[0]:0.2,
+        cart_ang_vel[1]:0.,
+        cart_ang_vel[2]:0.,
+        cart_pos[0]: -0.5,
+        cart_pos[2]: -0.09089599-3.,
+        cart_vel[0]: forward_vel,
+        cart_vel[1]: 0.5,
+        cart_vel[2]: 0.,
+        pole_theta: 0.,
+        pole_omega: 0.,
+        lwheel_omega: -forward_vel/wheel_radius,
+        rwheel_omega: -forward_vel/wheel_radius,
+    }
 
-#get_lwheel_contact_vel = lambdify([q_sym+u_sym], lwheel_contact_vel)
-#get_rwheel_contact_vel = lambdify([q_sym+u_sym], rwheel_contact_vel)
-#get_lwheel_contact_force = lambdify([q_sym+u_sym], lwheel_contact_force)
+bb_sys.specifieds = {
+        left_motor_torque: t_l,
+        right_motor_torque: t_r,
+    }
 
-#from multiprocessing import Process, Queue
-#from visual import *
-#from time import sleep
+bb_sys.generate_ode_function(generator='cython')
 
-#framerate = 30
-#speedup = 0.2
+dyn = bb_sys.evaluate_ode_function
+x0 = bb_sys._initial_conditions_padded_with_defaults()
+x0 = [x0[k] for k in bb_sys.states]
 
-#def vis_proc(q):
-    #def vpy(v):
-        #return vector(v[1], -v[2], -v[0])
+get_cart_pos = lambdify([q_sym+u_sym], (cart_masscenter.pos_from(O)-0.5*(wheel_base-0.03)*cart_frame.y).to_matrix(N))
+get_cart_axis = lambdify([q_sym+u_sym], ((wheel_base-0.03)*cart_frame.y).to_matrix(N))
+get_cart_up = lambdify([q_sym+u_sym], cart_frame.z.to_matrix(N))
 
-    #scene = display(width=1920, height=1200, background=color.black, ambient=color.white)
-    #scene.autoscale = scene.autocenter = False
-    #scene.range = 1.62
+get_pole_pos = lambdify([q_sym+u_sym], (pole_masscenter.pos_from(O)-0.5*pole_length*pole_frame.z).to_matrix(N))
+get_pole_axis = lambdify([q_sym+u_sym], (pole_length*pole_frame.z).to_matrix(N))
+get_pole_up = lambdify([q_sym+u_sym], pole_frame.x.to_matrix(N))
 
-    #theta = radians(30.)
-    #scene.forward=vpy((cos(theta),0.,sin(theta)))
+get_payload_pos = lambdify([q_sym+u_sym], (payload_masscenter.pos_from(O)).to_matrix(N))
+get_payload_axis = lambdify([q_sym+u_sym], (payload_frame.z*payload_height).to_matrix(N))
+get_payload_up = lambdify([q_sym+u_sym], payload_frame.x.to_matrix(N))
 
-    #floor = cylinder(pos=(0,0,0), axis=vpy((0.,0.,0.1)), material=materials.wood, color=(0.,.5,0.), radius=25.)
+get_lwheel_pos = lambdify([q_sym+u_sym], (lwheel_masscenter.pos_from(O)-0.5*.02*cart_frame.y).to_matrix(N))
+get_lwheel_axis = lambdify([q_sym+u_sym], (.02*cart_frame.y).to_matrix(N))
+get_lwheel_up = lambdify([q_sym+u_sym], lwheel_frame.z.to_matrix(N))
 
-    #x = q.get()
+get_rwheel_pos = lambdify([q_sym+u_sym], (rwheel_masscenter.pos_from(O)-0.5*.02*cart_frame.y).to_matrix(N))
+get_rwheel_axis = lambdify([q_sym+u_sym], (.02*cart_frame.y).to_matrix(N))
+get_rwheel_up = lambdify([q_sym+u_sym], rwheel_frame.z.to_matrix(N))
 
-    #scene.center = vpy(get_pole_pos(x)+get_pole_axis(x)*0.75)
-    #cart = cylinder(pos=vpy(get_cart_pos(x)), axis=vpy(get_cart_axis(x)), up=vpy(get_cart_up(x)), radius=0.9*wheel_radius, material=materials.wood, color=color.gray(0.15))
-    #lwheel = cylinder(pos=vpy(get_lwheel_pos(x)), axis=vpy(get_lwheel_axis(x)), up=vpy(get_lwheel_up(x)), radius=wheel_radius, material=materials.wood, color=color.gray(0.15))
-    #rwheel = cylinder(pos=vpy(get_rwheel_pos(x)), axis=vpy(get_rwheel_axis(x)), up=vpy(get_lwheel_up(x)), radius=wheel_radius, material=materials.wood, color=color.gray(0.15))
-    #pole = cylinder(pos=vpy(get_pole_pos(x)), axis=vpy(get_pole_axis(x)), up=vpy(get_pole_up(x)), radius=0.03429/2, material=materials.wood, color=color.gray(0.2))
+from multiprocessing import Process, Queue
+from visual import *
+from time import sleep
 
-    #sleep(1)
-    #while(True):
-        #rate(framerate)
-        #x = q.get()
+framerate = 30
+speedup = 1.
 
-        #cart.pos = vpy(get_cart_pos(x))
-        #cart.axis = vpy(get_cart_axis(x))
-        #cart.up = vpy(get_cart_up(x))
+def vis_proc(q):
+    def vpy(v):
+        return vector(v[1], -v[2], -v[0])
 
-        #lwheel.pos = vpy(get_lwheel_pos(x))
-        #lwheel.axis = vpy(get_lwheel_axis(x))
-        #lwheel.up = vpy(get_lwheel_up(x))
+    scene = display(width=1920, height=1200, background=color.black, ambient=color.white)
+    scene.autoscale = scene.autocenter = False
+    scene.range = 1.62
 
-        #rwheel.pos = vpy(get_rwheel_pos(x))
-        #rwheel.axis = vpy(get_rwheel_axis(x))
-        #rwheel.up = vpy(get_rwheel_up(x))
+    theta = radians(30.)
+    scene.forward=vpy((cos(theta),0.,sin(theta)))
 
-        #pole.pos = vpy(get_pole_pos(x))
-        #pole.axis = vpy(get_pole_axis(x))
-        #pole.up = vpy(get_pole_up(x))
+    floor = cylinder(pos=(0,0,0), axis=vpy((0.,0.,0.1)), material=materials.wood, color=(0.,.5,0.), radius=25.)
 
-        #scene.center = vpy(get_pole_pos(x)+get_pole_axis(x)*0.75)
+    x = q.get()
 
+    scene.center = vpy(get_pole_pos(x)+get_pole_axis(x)*0.75)
+    cart = cylinder(pos=vpy(get_cart_pos(x)), axis=vpy(get_cart_axis(x)), up=vpy(get_cart_up(x)), radius=cart_radius, material=materials.wood, color=color.gray(0.15))
+    lwheel = cylinder(pos=vpy(get_lwheel_pos(x)), axis=vpy(get_lwheel_axis(x)), up=vpy(get_lwheel_up(x)), radius=wheel_radius, material=materials.wood, color=color.gray(0.15))
+    rwheel = cylinder(pos=vpy(get_rwheel_pos(x)), axis=vpy(get_rwheel_axis(x)), up=vpy(get_lwheel_up(x)), radius=wheel_radius, material=materials.wood, color=color.gray(0.15))
+    pole = cylinder(pos=vpy(get_pole_pos(x)), axis=vpy(get_pole_axis(x)), up=vpy(get_pole_up(x)), radius=pole_radius, material=materials.wood, color=color.gray(0.2))
+    payload = box(pos=vpy(get_payload_pos(x)), axis=vpy(get_payload_axis(x)), up=vpy(get_payload_up(x)), length=payload_height, width=payload_width, height=payload_thickness, material=materials.wood, color=color.gray(0.1))
 
-#if __name__ == '__main__':
-    #import signal
-    #import sys
-    #from Queue import Full
-    #q = Queue(3)
-    #p = Process(target=vis_proc, args=(q,))
-    #t = 0.
-    #dt = speedup/framerate
-    #x = x0
-    #q.put(x)
-    #p.start()
+    wall = box(pos=vpy((0.05,0,-.1)), height=.2, width=5., axis=vpy((.1,0,0)), material=materials.wood)
 
-    #def signal_handler(signal, frame):
-        #p.terminate()
-        #sys.exit(0)
+    sleep(1)
+    while(True):
+        rate(framerate)
+        x = q.get()
 
-    #signal.signal(signal.SIGINT, signal_handler)
+        cart.pos = vpy(get_cart_pos(x))
+        cart.axis = vpy(get_cart_axis(x))
+        cart.up = vpy(get_cart_up(x))
 
-    #while(True):
-        #times = np.linspace(t,t+dt,2)
-        #x = odeint(dyn,x,times,(bb_sys._specifieds_padded_with_defaults(), bb_sys._constants_padded_with_defaults()), rtol=1e-4, atol=1e-6)[-1]
-        #t = times[-1]
+        lwheel.pos = vpy(get_lwheel_pos(x))
+        lwheel.axis = vpy(get_lwheel_axis(x))
+        lwheel.up = vpy(get_lwheel_up(x))
 
-        #while True:
-            #try:
-                #if not p.is_alive():
-                    #p.terminate()
-                    #sys.exit(0)
-                #q.put(x, timeout = 0.1)
-                #break
-            #except Full:
-                #continue
+        rwheel.pos = vpy(get_rwheel_pos(x))
+        rwheel.axis = vpy(get_rwheel_axis(x))
+        rwheel.up = vpy(get_rwheel_up(x))
+
+        pole.pos = vpy(get_pole_pos(x))
+        pole.axis = vpy(get_pole_axis(x))
+        pole.up = vpy(get_pole_up(x))
+
+        payload.pos = vpy(get_payload_pos(x))
+        payload.axis = vpy(get_payload_axis(x))
+        payload.up = vpy(get_payload_up(x))
+
+        scene.center = vpy(get_pole_pos(x)+get_pole_axis(x)*0.75)
+
+if __name__ == '__main__':
+    import signal
+    import sys
+    from Queue import Full
+    q = Queue(30)
+    p = Process(target=vis_proc, args=(q,))
+    t = 0.
+    dt = speedup/framerate
+    x = x0
+    q.put(x)
+    p.start()
+
+    def signal_handler(signal, frame):
+        p.terminate()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    while(True):
+        times = np.linspace(t,t+dt,2)
+        x = odeint(dyn,x,times,(bb_sys._specifieds_padded_with_defaults(), bb_sys._constants_padded_with_defaults()), rtol=1e-2, atol=1e-4)[-1]
+        t = times[-1]
+
+        while True:
+            try:
+                if not p.is_alive():
+                    p.terminate()
+                    sys.exit(0)
+                q.put(x, timeout = 0.1)
+                break
+            except Full:
+                continue

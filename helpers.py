@@ -4,9 +4,9 @@ import math
 
 def new_sym(prefix, sym_list, n=1, dynlevel=None):
     if isinstance(dynlevel,int):
-        sym_list.extend(dynamicsymbols('%s%u:%u' % (prefix, len(sym_list), len(sym_list)+n), dynlevel))
+        sym_list.extend(dynamicsymbols('%s%u:%u' % (prefix, 0, n), dynlevel))
     else:
-        sym_list.extend(symbols('%s%u:%u' % (prefix, len(sym_list), len(sym_list)+n)))
+        sym_list.extend(symbols('%s%u:%u' % (prefix, 0, n)))
 
     if n==1:
         return sym_list[-1]
@@ -60,7 +60,7 @@ def quat_to_matrix(q):
     q = Matrix(q)
     return (q[0]**2-(q[1:,0].T*q[1:,0])[0])*eye(3) + 2.*(q[1:,0]*q[1:,0].T) + 2.*q[0]*skew(q[1:,0])
 
-def quat_312_roll(quat):
+def quat_321_roll(quat):
     qr = quat[0]
     qi = quat[1]
     qj = quat[2]
@@ -74,7 +74,7 @@ def quat_312_roll(quat):
 
     return math.atan2(2*(qr*qi+qj*qk), 1-2*(qi**2+qj**2))
 
-def quat_312_pitch(quat):
+def quat_321_pitch(quat):
     qr = quat[0]
     qi = quat[1]
     qj = quat[2]
