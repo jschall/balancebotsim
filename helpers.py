@@ -119,7 +119,7 @@ def extractSubexpressions(inexprs, prefix='X', threshold=1, prev_subx=[]):
                 break
 
     for i in range(len(subexprs)):
-        newSym = Symbol('%s[%u]' % (prefix,i+len(prev_subx)))
+        newSym = Symbol('%s_%u' % (prefix,i))
         sub = {subexprs[i][0]:newSym}
         subexprs[i] = (newSym,subexprs[i][1])
         subexprs = [(x[0],x[1].xreplace(sub)) for x in subexprs]
