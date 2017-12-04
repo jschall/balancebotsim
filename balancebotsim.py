@@ -11,6 +11,31 @@ import sys
 
 from balancebot_constants import *
 
+def rk(a,b,c,x_0,x_dot,dt):
+    N = a.rows
+    assert a.cols == N and len(b) == N and len(c) == N
+
+    k = []
+
+    for i in range(N):
+        x_n = x_0
+        for j in range(1,i):
+            x_n += dt*a[i,j]*k[j]
+        k.append(x_dot.xreplace(dict(zip(x_0, x_n))))
+
+    x_n = x_0
+    for i in range(N):
+        x_n += dt*b[i]*k[i]
+
+    return x_n
+
+def rk4(x_0, x_dot, dt):
+    a = Matrix([[0,0,0,0],[Rational(1,2),0,0,0],[0,Rational(1,2),0,0],[0,0,1,0]])
+    b = Matrix([Rational(1,6),Rational(1,3),Rational(1,3),Rational(1,6)])
+    c = Matrix([0,Rational(1,2),Rational(1,2),1])
+
+    return rk(a,b,c,x_0,x_dot,dt)
+
 # Symbols
 q_sym = [] # Generalized coordinates
 qd_sym = [] # Generalized coordinate derivatives
@@ -43,6 +68,8 @@ rwheel_omega = new_u('rwheel_omega')
 # Define identifiers for force inputs
 right_motor_torque = new_in('right_motor_torque')
 left_motor_torque = new_in('left_motor_torque')
+
+print q_sym+u_sym
 
 # Define newtonian reference frame and origin, gravity
 N = ReferenceFrame('N')
@@ -200,39 +227,16 @@ kdd = KM.kindiffdict()
 mm = KM.mass_matrix_full
 fo = KM.forcing_full
 
-subs = {}
-subs.update(kdd)
-subs.update(dict(zip(q_sym+u_sym, symbols('x[0:%u]' % (len(q_sym+u_sym),)))))
-subs.update(dict(zip(in_sym, symbols('in[0:%u]' % (len(in_sym),)))))
+print(mm.det())
 
-mm = mm.xreplace(subs)
-fo = fo.xreplace(subs)
+mm = mm.xreplace(kdd)
+fo = fo.xreplace(kdd)
 
-#mm, fo, subx1 = extractSubexpressions([mm, fo], 'subx1')
+mm, fo, subx = extractSubexpressions([mm, fo], 'subx')
 
-eom = mm.LUsolve(fo)
-eom, subx = extractSubexpressions([eom], 'subx')
+print(count_ops(mm)+count_ops(fo)+count_ops(subx))
 
-print(count_ops(eom)+count_ops(subx))
-
-output = {'eom': {'subx': subx, 'param': Matrix(q_sym+u_sym+in_sym), 'ret': eom}}
-for b in bodies:
-    output[str(b)+'_masscenter_pos'] = {'param': Matrix(q_sym+u_sym), 'ret': simplify(b.masscenter.pos_from(O).to_matrix(N))}
-    output[str(b)+'_masscenter_vel'] = {'param': Matrix(q_sym+u_sym), 'ret': simplify(b.masscenter.vel(N).to_matrix(N))}
-    output[str(b)+'_rot_body_to_newtonian'] = {'param': Matrix(q_sym+u_sym), 'ret': simplify(N.dcm(b.frame))}
-
-with open('dyn.h', 'w') as f:
+with open('output/derivation.srepr', 'wb') as f:
     f.truncate()
-    f.write('#pragma once\n')
-    f.write('#define N_STATES %u\n' % (len(q_sym+u_sym),))
-    f.write('void dyn(const float* x, const float* in, float* ret) {\n')
-
-    for name,expr in output['eom']['subx']:
-        f.write('    float %s = %s;\n' % (name,ccode(expr)))
-
-    f.write('\n')
-
-    for i in range(len(output['eom']['ret'])):
-        f.write('ret[%u] = %s\n' % (i,ccode(output['eom']['ret'][i])))
-
-    f.write('}\n')
+    f.write(srepr({'mm':mm, 'fo':fo, 'subx':subx, 'inputs':in_sym, 'states':q_sym+u_sym}))
+    print('wrote output/derivation.srepr')
